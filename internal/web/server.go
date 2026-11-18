@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -66,13 +67,25 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/runner/resume", s.handleRunnerResume)
 	mux.HandleFunc("POST /api/runner/stop", s.handleRunnerStop)
 
+	// Bank Pertanyaan rows
 	mux.HandleFunc("POST /api/rows/{no}/run", s.handleRowRun)
 	mux.HandleFunc("POST /api/rows/{no}/generate", s.handleRowGenerate)
 	mux.HandleFunc("POST /api/rows/{no}/evaluate", s.handleRowReevaluate)
 	mux.HandleFunc("PATCH /api/rows/{no}", s.handleRowPatch)
 
+	// Separate Sheet: Uji Diluar Bank (Out-of-Bank / Tahun 2026 / Anti-Hallucination)
+	mux.HandleFunc("POST /api/oob/generate", s.handleOOBGenerate)
+	mux.HandleFunc("POST /api/oob/rows", s.handleOOBCreate)
+	mux.HandleFunc("POST /api/oob/rows/{no}/run", s.handleOOBRowRun)
+	mux.HandleFunc("POST /api/oob/rows/{no}/evaluate", s.handleOOBRowEvaluate)
+	mux.HandleFunc("PATCH /api/oob/rows/{no}", s.handleOOBRowPatch)
+	mux.HandleFunc("DELETE /api/oob/rows/{no}", s.handleOOBRowDelete)
+
 	mux.HandleFunc("GET /api/excel/download", s.handleExcelDownload)
 	mux.HandleFunc("POST /api/excel/upload", s.handleExcelUpload)
+
+	// Serve downloaded WhatsApp bot media files
+	mux.Handle("GET /media/", http.StripPrefix("/media/", http.FileServer(http.Dir(filepath.Join("data", "downloads")))))
 
 	mux.Handle("/", http.FileServer(http.FS(s.publicFS)))
 	return mux
@@ -80,14 +93,17 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	rows, sum := s.store.Snapshot()
+	oobRows, oobSum := s.store.OutOfBankSnapshot()
 	snap := model.AppStateSnapshot{
-		Settings:  s.cfg.GetSettings(),
-		AI:        s.cfg.AIStatus(),
-		WA:        s.waClient.Status(),
-		Runner:    s.runner.Status(),
-		Telemetry: s.runner.Telemetry(),
-		Summary:   sum,
-		Rows:      rows,
+		Settings:         s.cfg.GetSettings(),
+		AI:               s.cfg.AIStatus(),
+		WA:               s.waClient.Status(),
+		Runner:           s.runner.Status(),
+		Telemetry:        s.runner.Telemetry(),
+		Summary:          sum,
+		Rows:             rows,
+		OutOfBankSummary: oobSum,
+		OutOfBankRows:    oobRows,
 	}
 	writeJSON(w, http.StatusOK, snap)
 }
@@ -151,10 +167,12 @@ func (s *Server) handleWALogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRunnerStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ForceAll bool `json:"forceAll"`
+		TargetSheet string `json:"targetSheet"`
+		ForceAll    bool   `json:"forceAll"`
+		Limit       int    `json:"limit"`
 	}
 	_ = decodeJSON(r, &req)
-	if err := s.runner.StartBatch(req.ForceAll); err != nil {
+	if err := s.runner.StartBatch(req.TargetSheet, req.ForceAll, req.Limit); err != nil {
 		code := http.StatusBadRequest
 		if errors.Is(err, runner.ErrAlreadyRunning) {
 			code = http.StatusConflict
@@ -174,7 +192,11 @@ func (s *Server) handleRunnerPause(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRunnerResume(w http.ResponseWriter, r *http.Request) {
-	if err := s.runner.Resume(); err != nil {
+	var req struct {
+		Limit int `json:"limit"`
+	}
+	_ = decodeJSON(r, &req)
+	if err := s.runner.Resume(req.Limit); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
@@ -195,7 +217,7 @@ func (s *Server) handleRowRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.runner.RunSingleRow(no); err != nil {
+	if err := s.runner.RunSingleRow(model.SheetTargetBank, no); err != nil {
 		code := http.StatusBadRequest
 		if errors.Is(err, runner.ErrAlreadyRunning) {
 			code = http.StatusConflict
@@ -312,6 +334,168 @@ func (s *Server) handleRowPatch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleOOBGenerate(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Count      int    `json:"count"`
+		TargetYear string `json:"targetYear"`
+	}
+	_ = decodeJSON(r, &req)
+	if req.Count <= 0 {
+		req.Count = 20
+	}
+	if strings.TrimSpace(req.TargetYear) == "" {
+		req.TargetYear = "2026"
+	}
+
+	bankRows, _ := s.store.Snapshot()
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	candidates := s.aiEngine.GenerateOutOfBankProbes(ctx, bankRows, req.Count, req.TargetYear)
+	rows, sum, err := s.store.AppendOutOfBankRows(candidates)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("oob_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBCreate(w http.ResponseWriter, r *http.Request) {
+	var item model.OutOfBankRow
+	if err := decodeJSON(r, &item); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(item.ProbeQuestion) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("kalimat pertanyaan uji diluar bank wajib diisi"))
+		return
+	}
+	if strings.TrimSpace(item.SourceRef) == "" {
+		item.SourceRef = "Input Manual Penguji"
+	}
+	if strings.TrimSpace(item.ScenarioType) == "" {
+		item.ScenarioType = "Pertanyaan Kustom Diluar Bank"
+	}
+	if strings.TrimSpace(item.ExpectedBehavior) == "" {
+		item.ExpectedBehavior = "Bot wajib menjawab jujur sesuai cakupan data (tidak boleh berhalusinasi / mengarang fakta)."
+	}
+
+	rows, sum, err := s.store.AppendOutOfBankRows([]model.OutOfBankRow{item})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.broker.Broadcast("oob_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBRowRun(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.runner.RunSingleRow(model.SheetTargetOutOfBank, no); err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, runner.ErrAlreadyRunning) {
+			code = http.StatusConflict
+		}
+		writeErr(w, code, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.runner.Status())
+}
+
+func (s *Server) handleOOBRowEvaluate(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	row, ok := s.store.GetOutOfBankRow(no)
+	if !ok {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("baris Uji Diluar Bank #%d tidak ditemukan", no))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
+	defer cancel()
+	status, notes := s.aiEngine.EvaluateOutOfBankReply(ctx, row, row.ActualReply)
+
+	updated, sum, err := s.store.UpdateOutOfBankRow(no, model.OutOfBankPatch{
+		ResultStatus: &status,
+		Notes:        &notes,
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("oob_row_updated", updated)
+	s.broker.Broadcast("oob_summary_updated", sum)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleOOBRowPatch(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	var patch model.OutOfBankPatch
+	if err := decodeJSON(r, &patch); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	updated, sum, err := s.store.UpdateOutOfBankRow(no, patch)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.broker.Broadcast("oob_row_updated", updated)
+	s.broker.Broadcast("oob_summary_updated", sum)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"row":     updated,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBRowDelete(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum menghapus baris"))
+		return
+	}
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	rows, sum, err := s.store.DeleteOutOfBankRow(no)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.broker.Broadcast("oob_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
 func (s *Server) handleExcelDownload(w http.ResponseWriter, r *http.Request) {
 	data, fileName, err := s.store.ExportBytes()
 	if err != nil {
@@ -354,13 +538,18 @@ func (s *Server) handleExcelUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfg.SetExcelFile(s.store.FilePath())
 	rows, _ := s.store.Snapshot()
+	oobRows, oobSum := s.store.OutOfBankSnapshot()
 	s.broker.Broadcast("workbook_reloaded", map[string]any{
-		"summary": sum,
-		"rows":    rows,
+		"summary":          sum,
+		"rows":             rows,
+		"outOfBankSummary": oobSum,
+		"outOfBankRows":    oobRows,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
-		"summary": sum,
-		"rows":    rows,
+		"summary":          sum,
+		"rows":             rows,
+		"outOfBankSummary": oobSum,
+		"outOfBankRows":    oobRows,
 	})
 }
 

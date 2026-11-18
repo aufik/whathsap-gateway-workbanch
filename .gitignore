@@ -6,9 +6,14 @@
 *.db-shm
 *.db-wal
 
-# Temporary & backup Excel files
+# Temporary, metrics sidecar, & backup Excel files
 *.tmp
 *.backup.xlsx
+*.metrics.json
+
+# Downloaded WhatsApp bot media files
+data/downloads/*
+!data/downloads/.gitkeep
 
 # Compiled binary
 wa-bot-tester

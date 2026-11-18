@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,15 +38,20 @@ var ErrCircuitBreaker = errors.New("circuit breaker triggered")
 type TelemetryHook func(phase, label, presence string, durationMs int, rowNo int, extra func(*model.HumanTelemetry))
 
 type collectedBubble struct {
-	id     types.MessageID
-	chat   types.JID
-	sender types.JID
-	text   string
+	id         types.MessageID
+	chat       types.JID
+	sender     types.JID
+	text       string
+	mediaBytes []byte
+	mediaExt   string
+	mediaName  string
 }
 
 type replyCollector struct {
 	botPhone string
 	botLID   string
+	rowLabel string
+	rowNo    int
 	sentAt   time.Time
 	ch       chan collectedBubble
 }
@@ -300,22 +307,25 @@ func (c *Client) SetPresenceAvailable(ctx context.Context, available bool) {
 
 func (c *Client) AskBotHumanized(
 	ctx context.Context,
+	rowLabel string,
 	rowNo int,
 	botPhone string,
 	questionText string,
 	settings model.HumanSettings,
 	hook TelemetryHook,
-) (string, error) {
+) (string, []string, model.RowHumanMetrics, error) {
+	var metrics model.RowHumanMetrics
+
 	cleanBot := config.NormalizePhone(botPhone)
 	if len(cleanBot) < 8 {
-		return "", errors.New("nomor WhatsApp Bot target belum diisi atau tidak valid")
+		return "", nil, metrics, errors.New("nomor WhatsApp Bot target belum diisi atau tidak valid")
 	}
 
 	c.mu.RLock()
 	cli := c.cli
 	c.mu.RUnlock()
 	if cli == nil || !cli.IsConnected() || cli.Store.ID == nil {
-		return "", fmt.Errorf("%w: WhatsApp penguji belum terhubung/login", ErrCircuitBreaker)
+		return "", nil, metrics, fmt.Errorf("%w: WhatsApp penguji belum terhubung/login", ErrCircuitBreaker)
 	}
 
 	targetJID := types.NewJID(cleanBot, types.DefaultUserServer)
@@ -326,34 +336,59 @@ func (c *Client) AskBotHumanized(
 		}
 	}
 
-	// 1. Presence Available
+	// 1. Presence Available + Pre-Think Focus Delay (looking from Excel to WA input box)
 	_ = cli.SendPresence(ctx, types.PresenceAvailable)
+	preThinkMs := randBetween(settings.PreThinkMinMs, settings.PreThinkMaxMs)
+	metrics.PreThinkMs = preThinkMs
+	if hook != nil {
+		hook(
+			"pre_think",
+			fmt.Sprintf("%s: Fokus sejenak (%.1f dtk) sebelum mulai mengetik...", rowLabel, float64(preThinkMs)/1000),
+			"available",
+			preThinkMs,
+			rowNo,
+			func(t *model.HumanTelemetry) {
+				t.LastPreThinkMs = preThinkMs
+			},
+		)
+	}
+	if err := sleepCtx(ctx, time.Duration(preThinkMs)*time.Millisecond); err != nil {
+		return "", nil, metrics, err
+	}
 
-	// 2. Proportional Human Typing Speed Simulation
+	// 2. Variable Multi-Burst Human Typing Speed Simulation
 	charCount := len([]rune(questionText))
 	typingMs := computeTypingDurationMs(charCount, settings)
+	plannedBursts := estimateBurstCount(typingMs)
+	metrics.TypingChars = charCount
+	metrics.TypingMs = typingMs
+	metrics.TypingBursts = plannedBursts
+
 	if hook != nil {
 		hook(
 			"typing",
-			fmt.Sprintf("Baris #%d: Mengetik %d huruf (%.1f dtk, ~%d ms/huruf)...", rowNo, charCount, float64(typingMs)/1000, maxInt(15, typingMs/maxInt(1, charCount))),
+			fmt.Sprintf("%s: Mengetik %d huruf selama %.1f dtk (%d gelombang ketik, ~%d ms/huruf)...", rowLabel, charCount, float64(typingMs)/1000, plannedBursts, maxInt(20, typingMs/maxInt(1, charCount))),
 			"composing",
 			typingMs,
 			rowNo,
 			func(t *model.HumanTelemetry) {
 				t.LastTypingChars = charCount
 				t.LastTypingDurationMs = typingMs
+				t.LastTypingBursts = plannedBursts
 			},
 		)
 	}
 
-	if err := simulateTyping(ctx, cli, targetJID, typingMs); err != nil {
-		return "", err
+	if err := simulateMultiBurstTyping(ctx, cli, targetJID, typingMs, plannedBursts); err != nil {
+		return "", nil, metrics, err
 	}
 
 	// 3. Register Collector BEFORE Sending Message (eliminates fast-reply race condition)
 	coll := &replyCollector{
 		botPhone: cleanBot,
 		botLID:   botLIDUser,
+		rowLabel: rowLabel,
+		rowNo:    rowNo,
 		sentAt:   time.Now(),
 		ch:       make(chan collectedBubble, 32),
 	}
@@ -374,13 +409,13 @@ func (c *Client) AskBotHumanized(
 	})
 	_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
 	if err != nil {
-		return "", fmt.Errorf("%w: gagal mengirim pesan ke WA (%v)", ErrCircuitBreaker, err)
+		return "", nil, metrics, fmt.Errorf("%w: gagal mengirim pesan ke WA (%v)", ErrCircuitBreaker, err)
 	}
 
 	if hook != nil {
 		hook(
 			"waiting_reply",
-			fmt.Sprintf("Baris #%d: Pesan terkirim, menunggu balasan Bot (batas %d dtk)...", rowNo, settings.ReplyTimeoutMs/1000),
+			fmt.Sprintf("%s: Pesan terkirim, menunggu balasan Bot (batas %d dtk)...", rowLabel, settings.ReplyTimeoutMs/1000),
 			"available",
 			settings.ReplyTimeoutMs,
 			rowNo,
@@ -389,20 +424,46 @@ func (c *Client) AskBotHumanized(
 	}
 
 	// 5. Quiet-Window Multi-Bubble Collection
-	bubbles, err := collectBotBubbles(ctx, coll, rowNo, settings.QuietWindowMs, settings.ReplyTimeoutMs, hook)
+	waitStart := time.Now()
+	bubbles, err := collectBotBubbles(ctx, coll, rowLabel, rowNo, settings.QuietWindowMs, settings.ReplyTimeoutMs, hook)
+	metrics.BotReplyWaitMs = int(time.Since(waitStart).Milliseconds())
+	metrics.BotBubbles = len(bubbles)
 	if err != nil {
-		return "", err
+		return "", nil, metrics, err
 	}
 
-	combinedReply := formatCollectedBubbles(bubbles)
+	combinedReply, downloadedPaths := formatAndPersistBubbles(bubbles, rowLabel, rowNo)
 
-	// 6. Blue-Tick Read Receipt (MarkRead) + Human Reading Delay
+	// 6. Unread Reaction Delay (Before MarkRead) + Blue-Tick MarkRead + Reading Comprehension Delay
 	if len(bubbles) > 0 {
-		readMs := computeReadingDurationMs(len([]rune(combinedReply)), settings)
+		unreadMs := computeUnreadReactionDelayMs(settings)
+		metrics.UnreadDelayMs = unreadMs
+		if hook != nil {
+			hook(
+				"unread_delay",
+				fmt.Sprintf("%s: Balasan masuk (%d gelembung), jeda %.1f dtk sebelum buka/read chat...", rowLabel, len(bubbles), float64(unreadMs)/1000),
+				"available",
+				unreadMs,
+				rowNo,
+				func(t *model.HumanTelemetry) {
+					t.LastUnreadDelayMs = unreadMs
+				},
+			)
+		}
+		if err := sleepCtx(ctx, time.Duration(unreadMs)*time.Millisecond); err != nil {
+			return combinedReply, downloadedPaths, metrics, err
+		}
+
+		// Now send Blue-Tick Read Receipt (MarkRead)
+		markBubblesRead(ctx, cli, bubbles)
+
+		hasMedia := len(downloadedPaths) > 0 || strings.Contains(combinedReply, "[Berkas]") || strings.Contains(combinedReply, "[Koordinat]")
+		readMs := computeReadingDurationMs(len([]rune(combinedReply)), hasMedia, settings)
+		metrics.ReadDurationMs = readMs
 		if hook != nil {
 			hook(
 				"mark_read_reading",
-				fmt.Sprintf("Baris #%d: Mengirim centang biru (MarkRead) & membaca %d gelembung balasan (%.1f dtk)...", rowNo, len(bubbles), float64(readMs)/1000),
+				fmt.Sprintf("%s: Centang biru (MarkRead) terkirim, membaca isi balasan selama %.1f dtk...", rowLabel, float64(readMs)/1000),
 				"available",
 				readMs,
 				rowNo,
@@ -411,48 +472,66 @@ func (c *Client) AskBotHumanized(
 				},
 			)
 		}
-
-		// Brief natural eye-focus delay (~700ms) before marking read, then finish reading
-		focusWait := minInt(750, readMs/2)
-		if err := sleepCtx(ctx, time.Duration(focusWait)*time.Millisecond); err != nil {
-			return combinedReply, err
-		}
-		markBubblesRead(ctx, cli, bubbles)
-		if rem := readMs - focusWait; rem > 0 {
-			if err := sleepCtx(ctx, time.Duration(rem)*time.Millisecond); err != nil {
-				return combinedReply, err
-			}
+		if err := sleepCtx(ctx, time.Duration(readMs)*time.Millisecond); err != nil {
+			return combinedReply, downloadedPaths, metrics, err
 		}
 	}
 
-	return combinedReply, nil
+	metrics.TestedAt = time.Now().UnixMilli()
+	return combinedReply, downloadedPaths, metrics, nil
 }
 
-func simulateTyping(ctx context.Context, cli *whatsmeow.Client, targetJID types.JID, totalMs int) error {
-	_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
-	if totalMs <= 5200 {
+func estimateBurstCount(totalMs int) int {
+	if totalMs <= 5500 {
+		return 1
+	}
+	if totalMs <= 11500 {
+		return 2
+	}
+	return 3
+}
+
+func simulateMultiBurstTyping(ctx context.Context, cli *whatsmeow.Client, targetJID types.JID, totalMs int, bursts int) error {
+	if bursts <= 1 {
+		_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 		return sleepCtx(ctx, time.Duration(totalMs)*time.Millisecond)
 	}
 
-	// Long sentence: type first ~60%, pause briefly (0.7s thinking), then resume typing
-	firstHalf := (totalMs * 6) / 10
-	pauseMs := 700
-	secondHalf := maxInt(800, totalMs-firstHalf-pauseMs)
+	pauseCount := bursts - 1
+	totalPauseMs := 0
+	pauses := make([]int, pauseCount)
+	for i := 0; i < pauseCount; i++ {
+		p := randBetween(950, 2100)
+		pauses[i] = p
+		totalPauseMs += p
+	}
+	activeTypingMs := maxInt(1500, totalMs-totalPauseMs)
+	perBurst := activeTypingMs / bursts
+	rem := activeTypingMs - (perBurst * bursts)
 
-	if err := sleepCtx(ctx, time.Duration(firstHalf)*time.Millisecond); err != nil {
-		return err
+	for i := 0; i < bursts; i++ {
+		seg := perBurst
+		if i == bursts-1 {
+			seg += rem
+		}
+		_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
+		if err := sleepCtx(ctx, time.Duration(seg)*time.Millisecond); err != nil {
+			return err
+		}
+		if i < pauseCount {
+			_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
+			if err := sleepCtx(ctx, time.Duration(pauses[i])*time.Millisecond); err != nil {
+				return err
+			}
+		}
 	}
-	_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
-	if err := sleepCtx(ctx, time.Duration(pauseMs)*time.Millisecond); err != nil {
-		return err
-	}
-	_ = cli.SendChatPresence(ctx, targetJID, types.ChatPresenceComposing, types.ChatPresenceMediaText)
-	return sleepCtx(ctx, time.Duration(secondHalf)*time.Millisecond)
+	return nil
 }
 
 func collectBotBubbles(
 	ctx context.Context,
 	coll *replyCollector,
+	rowLabel string,
 	rowNo int,
 	quietWindowMs int,
 	replyTimeoutMs int,
@@ -495,7 +574,7 @@ func collectBotBubbles(
 			if hook != nil {
 				hook(
 					"waiting_reply",
-					fmt.Sprintf("Baris #%d: Gelembung balasan #%d diterima, pantau lanjutan %.1f dtk...", rowNo, len(bubbles), float64(quietWindowMs)/1000),
+					fmt.Sprintf("%s: Gelembung balasan #%d diterima, pantau lanjutan %.1f dtk...", rowLabel, len(bubbles), float64(quietWindowMs)/1000),
 					"available",
 					quietWindowMs,
 					rowNo,
@@ -585,15 +664,106 @@ func (c *Client) handleIncomingMessage(evt *events.Message) {
 		return
 	}
 
+	// Proactively download image/media bytes in background if present
+	mediaBytes, mediaExt, mediaName := c.downloadMediaIfPresent(cli, evt.Message)
+
 	select {
 	case coll.ch <- collectedBubble{
-		id:     evt.Info.ID,
-		chat:   evt.Info.Chat,
-		sender: evt.Info.Sender,
-		text:   text,
+		id:         evt.Info.ID,
+		chat:       evt.Info.Chat,
+		sender:     evt.Info.Sender,
+		text:       text,
+		mediaBytes: mediaBytes,
+		mediaExt:   mediaExt,
+		mediaName:  mediaName,
 	}:
 	default:
 	}
+}
+
+func (c *Client) downloadMediaIfPresent(cli *whatsmeow.Client, msg *waE2E.Message) ([]byte, string, string) {
+	if cli == nil {
+		return nil, "", ""
+	}
+	msg = unwrapContainerMessage(msg)
+	if msg == nil {
+		return nil, "", ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if img := msg.GetImageMessage(); img != nil {
+		ext := ".jpg"
+		if strings.Contains(img.GetMimetype(), "png") {
+			ext = ".png"
+		}
+		data, err := cli.Download(ctx, img)
+		if err == nil && len(data) > 0 {
+			return data, ext, "image" + ext
+		}
+	}
+
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		mime := strings.ToLower(doc.GetMimetype())
+		if strings.Contains(mime, "image") || strings.HasSuffix(strings.ToLower(doc.GetFileName()), ".png") || strings.HasSuffix(strings.ToLower(doc.GetFileName()), ".jpg") {
+			ext := ".png"
+			if strings.Contains(mime, "jpeg") || strings.Contains(mime, "jpg") {
+				ext = ".jpg"
+			}
+			data, err := cli.Download(ctx, doc)
+			if err == nil && len(data) > 0 {
+				name := doc.GetFileName()
+				if name == "" {
+					name = "doc" + ext
+				}
+				return data, ext, name
+			}
+		}
+	}
+
+	return nil, "", ""
+}
+
+func formatAndPersistBubbles(bubbles []collectedBubble, rowLabel string, rowNo int) (string, []string) {
+	if len(bubbles) == 0 {
+		return "", nil
+	}
+
+	saveDir := filepath.Join("data", "downloads")
+	_ = os.MkdirAll(saveDir, 0755)
+
+	var downloadedPaths []string
+	cleanLabel := strings.ReplaceAll(strings.ToLower(rowLabel), " ", "_")
+	cleanLabel = strings.ReplaceAll(cleanLabel, "#", "")
+
+	for idx, b := range bubbles {
+		if len(b.mediaBytes) > 0 {
+			ext := b.mediaExt
+			if ext == "" {
+				ext = ".png"
+			}
+			filename := fmt.Sprintf("%s_b%d_%d%s", cleanLabel, idx+1, time.Now().UnixMilli(), ext)
+			diskPath := filepath.Join(saveDir, filename)
+			if err := os.WriteFile(diskPath, b.mediaBytes, 0644); err == nil {
+				// Record relative web path
+				downloadedPaths = append(downloadedPaths, "/media/"+filename)
+			}
+		}
+	}
+
+	var combinedText string
+	if len(bubbles) == 1 {
+		combinedText = strings.TrimSpace(bubbles[0].text)
+	} else {
+		parts := make([]string, 0, len(bubbles))
+		for i, b := range bubbles {
+			parts = append(parts, fmt.Sprintf("[%d] %s", i+1, strings.TrimSpace(b.text)))
+		}
+		combinedText = strings.Join(parts, "\n\n")
+	}
+
+	return combinedText, downloadedPaths
 }
 
 func (c *Client) matchesBotSource(cli *whatsmeow.Client, coll *replyCollector, src types.MessageSource) bool {
@@ -743,10 +913,11 @@ func formatCollectedBubbles(bubbles []collectedBubble) string {
 
 func computeTypingDurationMs(chars int, s model.HumanSettings) int {
 	base := chars * s.TypingMsPerChar
-	jitterFactor := 0.82 + rand.Float64()*0.36 // 82% .. 118%
-	val := int(float64(base) * jitterFactor)
+	// Wide human variance: 78% .. 134% + random hesitation offset
+	jitterFactor := 0.78 + rand.Float64()*0.56
+	val := int(float64(base)*jitterFactor) + randBetween(350, 1600)
 	if val < s.TypingMinMs {
-		val = s.TypingMinMs + rand.Intn(maxInt(1, minInt(600, s.TypingMaxMs-s.TypingMinMs+1)))
+		val = s.TypingMinMs + randBetween(0, minInt(1800, maxInt(1, s.TypingMaxMs-s.TypingMinMs)))
 	}
 	if val > s.TypingMaxMs {
 		val = s.TypingMaxMs
@@ -754,16 +925,35 @@ func computeTypingDurationMs(chars int, s model.HumanSettings) int {
 	return val
 }
 
-func computeReadingDurationMs(replyChars int, s model.HumanSettings) int {
-	// ~18 ms/char reading speed + base reaction time
-	val := 1400 + replyChars*16 + rand.Intn(900)
+func computeUnreadReactionDelayMs(s model.HumanSettings) int {
+	val := randBetween(s.UnreadDelayMinMs, s.UnreadDelayMaxMs)
+	// 18% chance human noticed notification a couple seconds slower
+	if rand.Intn(100) < 18 {
+		val += randBetween(1200, 3200)
+	}
+	return val
+}
+
+func computeReadingDurationMs(replyChars int, hasMedia bool, s model.HumanSettings) int {
+	// ~22 ms/char comprehension speed + base visual scan + media inspection bonus
+	val := 1800 + replyChars*22 + randBetween(400, 1800)
+	if hasMedia {
+		val += randBetween(2000, 4200)
+	}
 	if val < s.ReadDelayMinMs {
-		val = s.ReadDelayMinMs
+		val = s.ReadDelayMinMs + randBetween(0, minInt(1200, maxInt(1, s.ReadDelayMaxMs-s.ReadDelayMinMs)))
 	}
 	if val > s.ReadDelayMaxMs {
 		val = s.ReadDelayMaxMs
 	}
 	return val
+}
+
+func randBetween(minVal, maxVal int) int {
+	if maxVal <= minVal {
+		return minVal
+	}
+	return minVal + rand.Intn(maxVal-minVal+1)
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

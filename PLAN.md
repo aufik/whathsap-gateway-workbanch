@@ -23,7 +23,7 @@ Berdasarkan bedah struktur `Uji-Bank-Pertanyaan-Programmer-4.xlsx`:
 ---
 
 ## 2. Pemilihan Teknologi (Golang Tech Stack)
-
+  
 Dirancang dengan prinsip *lean production engineering*: stabil, hemat memori (~25 MB RAM), bebas *race condition*, dan terkompilasi menjadi **1 file binary mandiri**.
 
 | Lapisan | Teknologi / Paket | Peran & Alasan Arsitektural |
@@ -167,10 +167,13 @@ Dirancang dengan prinsip *lean production engineering*: stabil, hemat memori (~2
     - **Metrik Keamanan Ritme**: Penghitung jarak menuju istirahat berikutnya (misal `14 / 19 soal sebelum micro-break`), status kehadiran WA (`Available` / `Composing` / `Paused` / `Unavailable`), status *Circuit Breaker*, dan riwayat log jejak perilaku (*activity feed*).
     - **Pengaturan Perilaku Manusia Langsung dari Web**: Pilihan preset cepat (*Aman Standar*, *Ekstra Hati-hati*, atau *Kustom*) untuk mengubah durasi baca (`MarkRead`), kecepatan ketik (`ms/karakter`), jeda antar soal, serta interval & durasi *micro-break* tanpa perlu restart server.
   - **Tab 1 — Dashboard & Ringkasan OPD**: Kartu KPI utama (*Total Baris*, *Cocok*, *Tidak*, *Belum Diuji*, *Tingkat Kecocokan %*) dan tabel rekapitulasi seluruh OPD sesuai sheet `Ringkasan` (klik nama OPD langsung memfilter tabel pertanyaan).
-  - **Tab 2 — Bank Pertanyaan & Hasil Uji**:
+  - **Tab 2 — Bank Pertanyaan & Hasil Uji (Lengkap dengan Kolom Ritme Manusia per Baris)**:
     - Filter kombinasi: Pencarian kata kunci, dropdown OPD, Kategori, Status Bank (`approved`/`waiting`), dan Status Uji (`Semua`/`Belum Diuji`/`Cocok`/`Tidak`).
-    - Kolom komparasi berdampingan (*Pertanyaan Data vs Diinput* serta *Balasan Data vs Balasan Sistem*) dengan badge visual untuk `[Berkas]` dan `[Koordinat]`.
-    - Tombol aksi per baris: *Generate Kalimat*, *Edit Input*, *Kirim Uji WA*, dan tombol koreksi cepat *Cocok / Tidak* beserta kolom catatan *Keterangan*.
+    - Kolom komparasi berdampingan (*Pertanyaan Data vs Diinput* serta *Balasan Data vs Balasan Sistem*), ditambah **Kolom Rekam Ritme Manusia Aktual** (`Pre-Think`, `Lama Typing + Gelombang`, `Waktu Tunggu Bot`, `Jeda Sebelum Read`, `Lama Baca + Centang Biru`, `Jeda Antrean`).
+    - **Modal Peluncuran Batch + Kalkulator Estimasi Waktu Real-Time**: Saat tombol *Mulai / Lanjut Uji* diklik, penguji memasukkan jumlah soal (dengan rekomendasi aman 30 soal/gelombang atau seluruh soal Excel) dan melihat estimasi **Waktu Paling Cepat** serta **Waktu Paling Lama** selesai secara *live*.
+  - **Tab 3 — Sheet Terpisah `Uji Diluar Bank` (Tahun 2026 / Pertanyaan Aneh & Anti-Halusinasi)**:
+    - Tersimpan pada worksheet tersendiri bernama **`Uji Diluar Bank`** di dalam file `.xlsx` yang sama tanpa mencampuri sheet `Bank Pertanyaan`, `Petunjuk`, maupun `Ringkasan`.
+    - Fitur generator otomatis dari soal bank (misal memutasi *Tahun 2022* menjadi *Tahun 2026/2027* atau objek di luar dataset) + tambah soal manual + evaluator khusus anti-halusinasi.
 
 ---
 

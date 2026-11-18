@@ -48,14 +48,16 @@ func NewRunner(
 		waClient: waClient,
 		emit:     emit,
 		status: model.RunnerStatus{
-			State: "idle",
+			State:       "idle",
+			TargetSheet: model.SheetTargetBank,
 		},
 		telemetry: model.HumanTelemetry{
-			Phase:           "idle",
-			PhaseLabel:      "Menunggu perintah pengujian",
-			Presence:        "unavailable",
-			NextBreakTarget: randRange(s.CooldownEveryMin, s.CooldownEveryMax),
-			RecentLogs:      []model.BehaviorLog{},
+			Phase:              "idle",
+			PhaseLabel:         "Menunggu perintah pengujian",
+			Presence:           "unavailable",
+			NextBreakTarget:    randRange(s.CooldownEveryMin, s.CooldownEveryMax),
+			NextLongRestTarget: randRange(s.LongRestEveryMin, s.LongRestEveryMax),
+			RecentLogs:         []model.BehaviorLog{},
 		},
 	}
 	return r
@@ -70,12 +72,18 @@ func (r *Runner) Status() model.RunnerStatus {
 func (r *Runner) Telemetry() model.HumanTelemetry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	cp := r.telemetry
-	cp.RecentLogs = append([]model.BehaviorLog(nil), r.telemetry.RecentLogs...)
-	return cp
+	return r.copyTelemetryLocked()
 }
 
-func (r *Runner) StartBatch(forceAll bool) error {
+func normalizeTargetSheet(raw string) string {
+	if strings.TrimSpace(strings.ToLower(raw)) == model.SheetTargetOutOfBank {
+		return model.SheetTargetOutOfBank
+	}
+	return model.SheetTargetBank
+}
+
+func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int) error {
+	sheet := normalizeTargetSheet(targetSheet)
 	settings := r.cfg.GetSettings()
 	if strings.TrimSpace(settings.BotPhone) == "" {
 		return errors.New("nomor WhatsApp Bot target wajib diisi terlebih dahulu")
@@ -85,9 +93,17 @@ func (r *Runner) StartBatch(forceAll bool) error {
 		return errors.New("WhatsApp penguji belum terhubung; silakan scan QR atau gunakan Pairing Code")
 	}
 
-	queue := r.store.PendingRowNumbers(forceAll)
-	if len(queue) == 0 {
-		return errors.New("seluruh baris pada Excel sudah selesai diuji")
+	var queue []int
+	if sheet == model.SheetTargetOutOfBank {
+		queue = r.store.PendingOutOfBankNumbers(forceAll, limit)
+		if len(queue) == 0 {
+			return errors.New("tidak ada soal Uji Diluar Bank yang belum diuji (tambahkan/generate soal terlebih dahulu)")
+		}
+	} else {
+		queue = r.store.PendingRowNumbers(forceAll, limit)
+		if len(queue) == 0 {
+			return errors.New("seluruh baris pada Bank Pertanyaan sudah selesai diuji")
+		}
 	}
 
 	r.mu.Lock()
@@ -100,6 +116,7 @@ func (r *Runner) StartBatch(forceAll bool) error {
 	r.status = model.RunnerStatus{
 		State:          "running",
 		Mode:           "batch",
+		TargetSheet:    sheet,
 		CurrentRowNo:   queue[0],
 		ProcessedInRun: 0,
 		TargetInRun:    len(queue),
@@ -111,7 +128,15 @@ func (r *Runner) StartBatch(forceAll bool) error {
 	if r.telemetry.NextBreakTarget <= 0 {
 		r.telemetry.NextBreakTarget = randRange(settings.CooldownEveryMin, settings.CooldownEveryMax)
 	}
-	r.appendLogLocked("batch_start", 0, fmt.Sprintf("Memulai batch sekuensial (%d soal antrean, mode kalimat: %s)", len(queue), settings.QuestionMode))
+	if r.telemetry.NextLongRestTarget <= 0 {
+		r.telemetry.NextLongRestTarget = randRange(settings.LongRestEveryMin, settings.LongRestEveryMax)
+	}
+
+	sheetLabel := "Bank Pertanyaan"
+	if sheet == model.SheetTargetOutOfBank {
+		sheetLabel = "Sheet Uji Diluar Bank"
+	}
+	r.appendLogLocked("batch_start", 0, fmt.Sprintf("Memulai batch %s (%d soal dipilih, mode kalimat: %s)", sheetLabel, len(queue), settings.QuestionMode))
 	stSnap := r.status
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
@@ -119,11 +144,12 @@ func (r *Runner) StartBatch(forceAll bool) error {
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 
-	go r.runQueueWorker(ctx, queue, true)
+	go r.runQueueWorker(ctx, sheet, queue, true)
 	return nil
 }
 
-func (r *Runner) RunSingleRow(rowNo int) error {
+func (r *Runner) RunSingleRow(targetSheet string, rowNo int) error {
+	sheet := normalizeTargetSheet(targetSheet)
 	settings := r.cfg.GetSettings()
 	if strings.TrimSpace(settings.BotPhone) == "" {
 		return errors.New("nomor WhatsApp Bot target wajib diisi terlebih dahulu")
@@ -132,8 +158,15 @@ func (r *Runner) RunSingleRow(rowNo int) error {
 	if !waSt.LoggedIn || !waSt.Connected {
 		return errors.New("WhatsApp penguji belum terhubung; silakan scan QR atau gunakan Pairing Code")
 	}
-	if _, ok := r.store.GetRow(rowNo); !ok {
-		return fmt.Errorf("baris No %d tidak ditemukan", rowNo)
+
+	if sheet == model.SheetTargetOutOfBank {
+		if _, ok := r.store.GetOutOfBankRow(rowNo); !ok {
+			return fmt.Errorf("baris Uji Diluar Bank #%d tidak ditemukan", rowNo)
+		}
+	} else {
+		if _, ok := r.store.GetRow(rowNo); !ok {
+			return fmt.Errorf("baris Bank Pertanyaan #%d tidak ditemukan", rowNo)
+		}
 	}
 
 	r.mu.Lock()
@@ -146,6 +179,7 @@ func (r *Runner) RunSingleRow(rowNo int) error {
 	r.status = model.RunnerStatus{
 		State:          "running",
 		Mode:           "single",
+		TargetSheet:    sheet,
 		CurrentRowNo:   rowNo,
 		ProcessedInRun: 0,
 		TargetInRun:    1,
@@ -154,7 +188,7 @@ func (r *Runner) RunSingleRow(rowNo int) error {
 	}
 	r.telemetry.CircuitBreakerTripped = false
 	r.telemetry.CircuitBreakerReason = ""
-	r.appendLogLocked("single_start", rowNo, fmt.Sprintf("Menguji tunggal Baris #%d (mode: %s)", rowNo, settings.QuestionMode))
+	r.appendLogLocked("single_start", rowNo, fmt.Sprintf("Menguji tunggal [%s] Baris #%d", sheet, rowNo))
 	stSnap := r.status
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
@@ -162,7 +196,7 @@ func (r *Runner) RunSingleRow(rowNo int) error {
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 
-	go r.runQueueWorker(ctx, []int{rowNo}, false)
+	go r.runQueueWorker(ctx, sheet, []int{rowNo}, false)
 	return nil
 }
 
@@ -195,8 +229,11 @@ func (r *Runner) Pause() error {
 	return nil
 }
 
-func (r *Runner) Resume() error {
-	return r.StartBatch(false)
+func (r *Runner) Resume(limit int) error {
+	r.mu.Lock()
+	sheet := r.status.TargetSheet
+	r.mu.Unlock()
+	return r.StartBatch(sheet, false, limit)
 }
 
 func (r *Runner) Stop() error {
@@ -226,15 +263,13 @@ func (r *Runner) Stop() error {
 	return nil
 }
 
-func (r *Runner) runQueueWorker(ctx context.Context, queue []int, isBatch bool) {
+func (r *Runner) runQueueWorker(ctx context.Context, sheet string, queue []int, isBatch bool) {
+	prevQueueDelayMs := 0
+	prevBreakKind := ""
+
 	for idx, rowNo := range queue {
 		if ctx.Err() != nil {
 			return
-		}
-
-		row, ok := r.store.GetRow(rowNo)
-		if !ok {
-			continue
 		}
 
 		settings := r.cfg.GetSettings()
@@ -245,104 +280,69 @@ func (r *Runner) runQueueWorker(ctx context.Context, queue []int, isBatch bool) 
 		r.mu.Unlock()
 		r.broadcast("runner_status", stSnap)
 
-		// Prepare question text: if user already typed custom QuestionInput and mode == manual, keep it;
-		// otherwise generate using selected mode (unless row already had manual edit when running single row?
-		// If QuestionInput is already populated and mode == manual, use it; else generate fresh if empty or non-manual).
-		questionToSend := strings.TrimSpace(row.QuestionInput)
-		if questionToSend == "" || settings.QuestionMode != model.ModeManual {
-			// If single-row test & user already pre-generated/edited QuestionInput, preserve it!
-			if !isBatch && questionToSend != "" {
-				// Keep user's previewed/edited QuestionInput on single-row run
-			} else {
-				gen, err := r.aiEngine.GenerateQuestion(ctx, row, settings.QuestionMode, time.Now().UnixNano())
-				if err != nil {
-					questionToSend = row.QuestionRef
-				} else {
-					questionToSend = gen
-				}
-			}
+		var okStep bool
+		if sheet == model.SheetTargetOutOfBank {
+			okStep = r.executeOutOfBankRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
+		} else {
+			okStep = r.executeBankRow(ctx, rowNo, isBatch, settings, prevQueueDelayMs, prevBreakKind)
 		}
-
-		// Save QuestionInput immediately so UI reflects the exact outgoing question
-		if updatedRow, sum, err := r.store.UpdateRow(rowNo, model.RowPatch{QuestionInput: &questionToSend}); err == nil {
-			r.broadcast("row_updated", updatedRow)
-			r.broadcast("summary_updated", sum)
-		}
-
-		// Execute humanized WhatsApp interaction (Presence -> Dynamic Typing -> Send -> Quiet-Window Collect -> MarkRead & Reading Delay)
-		actualReply, askErr := r.waClient.AskBotHumanized(
-			ctx,
-			rowNo,
-			settings.BotPhone,
-			questionToSend,
-			settings,
-			r.onTelemetryHook,
-		)
-
-		if askErr != nil {
-			if errors.Is(askErr, context.Canceled) {
-				return
-			}
-			if errors.Is(askErr, wa.ErrCircuitBreaker) {
-				r.tripCircuitBreaker(rowNo, askErr.Error())
-				return
-			}
-			r.mu.Lock()
-			r.status.LastError = askErr.Error()
-			r.appendLogLocked("error", rowNo, fmt.Sprintf("Kendala pada Baris #%d: %v", rowNo, askErr))
-			r.mu.Unlock()
-			continue
-		}
-
-		// Evaluate answer & persist atomically to Excel
-		evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
-		resStatus, notes := r.aiEngine.EvaluateReply(evalCtx, row, actualReply)
-		evalCancel()
-
-		updatedRow, sum, saveErr := r.store.UpdateRow(rowNo, model.RowPatch{
-			QuestionInput: &questionToSend,
-			ActualReply:   &actualReply,
-			Notes:         &notes,
-			ResultStatus:  &resStatus,
-		})
-		if saveErr != nil {
-			r.tripCircuitBreaker(rowNo, fmt.Sprintf("Gagal menyimpan ke Excel: %v", saveErr))
+		if !okStep {
 			return
 		}
 
-		r.mu.Lock()
-		r.status.ProcessedInRun++
-		r.telemetry.SinceLastBreak++
-		sinceBreak := r.telemetry.SinceLastBreak
-		breakTarget := r.telemetry.NextBreakTarget
-		r.appendLogLocked("evaluated", rowNo, fmt.Sprintf("Baris #%d selesai -> Status: %s (%d huruf balasan)", rowNo, resStatus, len([]rune(actualReply))))
-		stSnap = r.status
-		telSnap := r.copyTelemetryLocked()
-		r.mu.Unlock()
-
-		r.broadcast("row_updated", updatedRow)
-		r.broadcast("summary_updated", sum)
-		r.broadcast("runner_status", stSnap)
-		r.broadcast("human_behavior", telSnap)
-
-		// If there are remaining items in batch, perform Periodic Micro-Break or Randomized Inter-Question Jitter
 		hasMore := isBatch && idx < len(queue)-1
 		if !hasMore {
 			break
 		}
 
-		latestSettings := r.cfg.GetSettings()
-		if sinceBreak >= breakTarget {
-			cooldownMs := randRange(latestSettings.CooldownMinMs, latestSettings.CooldownMaxMs)
-			nextTarget := randRange(latestSettings.CooldownEveryMin, latestSettings.CooldownEveryMax)
+		// Determine post-question delay: Long-Rest > Micro-Break > Distraction Spike > Normal Jitter
+		r.mu.Lock()
+		sinceBreak := r.telemetry.SinceLastBreak
+		breakTarget := r.telemetry.NextBreakTarget
+		sinceLong := r.telemetry.SinceLastLongRest
+		longTarget := r.telemetry.NextLongRestTarget
+		r.mu.Unlock()
+
+		latest := r.cfg.GetSettings()
+		nextRowNo := queue[idx+1]
+
+		if sinceLong >= longTarget {
+			restMs := randRange(latest.LongRestMinMs, latest.LongRestMaxMs)
+			nextLong := randRange(latest.LongRestEveryMin, latest.LongRestEveryMax)
+			nextMicro := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
+
+			r.waClient.SetPresenceAvailable(ctx, false)
+			r.onTelemetryHook(
+				"long_rest",
+				fmt.Sprintf("Istirahat Panjang (Long-Rest) setelah %d soal selama %.1f menit agar akun super aman...", sinceLong, float64(restMs)/60000),
+				"unavailable",
+				restMs,
+				nextRowNo,
+				func(t *model.HumanTelemetry) {
+					t.TotalLongRestsTaken++
+					t.LastCooldownMs = restMs
+					t.SinceLastLongRest = 0
+					t.NextLongRestTarget = nextLong
+					t.SinceLastBreak = 0
+					t.NextBreakTarget = nextMicro
+				},
+			)
+			prevQueueDelayMs = restMs
+			prevBreakKind = "long_rest"
+			if !sleepCancelable(ctx, time.Duration(restMs)*time.Millisecond) {
+				return
+			}
+		} else if sinceBreak >= breakTarget {
+			cooldownMs := randRange(latest.CooldownMinMs, latest.CooldownMaxMs)
+			nextTarget := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
 
 			r.waClient.SetPresenceAvailable(ctx, false)
 			r.onTelemetryHook(
 				"micro_break",
-				fmt.Sprintf("Istirahat manusiawi (Micro-Break) setelah %d soal selama %.0f dtk agar irama alami...", sinceBreak, float64(cooldownMs)/1000),
+				fmt.Sprintf("Istirahat Manusiawi (Micro-Break) setelah %d soal selama %.0f dtk...", sinceBreak, float64(cooldownMs)/1000),
 				"unavailable",
 				cooldownMs,
-				rowNo,
+				nextRowNo,
 				func(t *model.HumanTelemetry) {
 					t.TotalBreaksTaken++
 					t.LastCooldownMs = cooldownMs
@@ -350,17 +350,32 @@ func (r *Runner) runQueueWorker(ctx context.Context, queue []int, isBatch bool) 
 					t.NextBreakTarget = nextTarget
 				},
 			)
+			prevQueueDelayMs = cooldownMs
+			prevBreakKind = "micro_break"
 			if !sleepCancelable(ctx, time.Duration(cooldownMs)*time.Millisecond) {
 				return
 			}
 		} else {
-			interDelayMs := randRange(latestSettings.DelayMinMs, latestSettings.DelayMaxMs)
+			isSpike := latest.DistractionSpikePct > 0 && rand.Intn(100) < latest.DistractionSpikePct
+			var interDelayMs int
+			var label string
+			if isSpike {
+				interDelayMs = randRange(latest.DistractionMinMs, latest.DistractionMaxMs)
+				prevBreakKind = "spike"
+				label = fmt.Sprintf("Jeda alami agak panjang (cek catatan Excel) selama %.1f dtk sebelum Baris #%d...", float64(interDelayMs)/1000, nextRowNo)
+			} else {
+				interDelayMs = randRange(latest.DelayMinMs, latest.DelayMaxMs)
+				prevBreakKind = "normal"
+				label = fmt.Sprintf("Jeda santai antar soal selama %.1f dtk sebelum lanjut Baris #%d...", float64(interDelayMs)/1000, nextRowNo)
+			}
+			prevQueueDelayMs = interDelayMs
+
 			r.onTelemetryHook(
 				"inter_question_delay",
-				fmt.Sprintf("Jeda santai antar soal selama %.1f dtk sebelum lanjut Baris #%d...", float64(interDelayMs)/1000, queue[idx+1]),
+				label,
 				"available",
 				interDelayMs,
-				queue[idx+1],
+				nextRowNo,
 				func(t *model.HumanTelemetry) {
 					t.LastInterDelayMs = interDelayMs
 				},
@@ -371,14 +386,13 @@ func (r *Runner) runQueueWorker(ctx context.Context, queue []int, isBatch bool) 
 		}
 	}
 
-	// Clean finish
 	r.mu.Lock()
 	if r.status.State == "running" {
 		r.status.State = "idle"
 		r.status.CurrentRowNo = 0
 		now := time.Now().UnixMilli()
 		r.telemetry.Phase = "idle"
-		r.telemetry.PhaseLabel = "Pengujian selesai — siap menunggu perintah berikutnya"
+		r.telemetry.PhaseLabel = "Sesi pengujian selesai — siap menunggu perintah berikutnya"
 		r.telemetry.Presence = "unavailable"
 		r.telemetry.ActiveRowNo = 0
 		r.telemetry.PhaseStartedAt = now
@@ -391,6 +405,180 @@ func (r *Runner) runQueueWorker(ctx context.Context, queue []int, isBatch bool) 
 	r.mu.Unlock()
 
 	r.waClient.SetPresenceAvailable(context.Background(), false)
+	r.broadcast("runner_status", stSnap)
+	r.broadcast("human_behavior", telSnap)
+}
+
+func (r *Runner) executeBankRow(
+	ctx context.Context,
+	rowNo int,
+	isBatch bool,
+	settings model.HumanSettings,
+	prevQueueDelayMs int,
+	prevBreakKind string,
+) bool {
+	row, ok := r.store.GetRow(rowNo)
+	if !ok {
+		return true
+	}
+
+	questionToSend := strings.TrimSpace(row.QuestionInput)
+	if questionToSend == "" || settings.QuestionMode != model.ModeManual {
+		if !isBatch && questionToSend != "" {
+			// Keep previewed/edited QuestionInput on single-row run
+		} else {
+			gen, err := r.aiEngine.GenerateQuestion(ctx, row, settings.QuestionMode, time.Now().UnixNano())
+			if err != nil {
+				questionToSend = row.QuestionRef
+			} else {
+				questionToSend = gen
+			}
+		}
+	}
+
+	if updatedRow, sum, err := r.store.UpdateRow(rowNo, model.RowPatch{QuestionInput: &questionToSend}); err == nil {
+		r.broadcast("row_updated", updatedRow)
+		r.broadcast("summary_updated", sum)
+	}
+
+	rowLabel := fmt.Sprintf("Bank #%d", rowNo)
+	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+		ctx,
+		rowLabel,
+		rowNo,
+		settings.BotPhone,
+		questionToSend,
+		settings,
+		r.onTelemetryHook,
+	)
+
+	if askErr != nil {
+		if errors.Is(askErr, context.Canceled) {
+			return false
+		}
+		if errors.Is(askErr, wa.ErrCircuitBreaker) {
+			r.tripCircuitBreaker(rowNo, askErr.Error())
+			return false
+		}
+		r.mu.Lock()
+		r.status.LastError = askErr.Error()
+		r.appendLogLocked("error", rowNo, fmt.Sprintf("Kendala pada %s: %v", rowLabel, askErr))
+		r.mu.Unlock()
+		return true
+	}
+
+	metrics.QueueDelayMs = prevQueueDelayMs
+	metrics.BreakKind = prevBreakKind
+
+	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
+	resStatus, notes := r.aiEngine.EvaluateReply(evalCtx, row, actualReply)
+	evalCancel()
+
+	patch := model.RowPatch{
+		QuestionInput: &questionToSend,
+		ActualReply:   &actualReply,
+		Notes:         &notes,
+		ResultStatus:  &resStatus,
+		Metrics:       &metrics,
+	}
+	if len(mediaFiles) > 0 {
+		patch.MediaFiles = &mediaFiles
+	}
+
+	updatedRow, sum, saveErr := r.store.UpdateRow(rowNo, patch)
+	if saveErr != nil {
+		r.tripCircuitBreaker(rowNo, fmt.Sprintf("Gagal menyimpan ke Excel: %v", saveErr))
+		return false
+	}
+
+	r.recordRowCompletion(rowLabel, rowNo, resStatus, len([]rune(actualReply)))
+	r.broadcast("row_updated", updatedRow)
+	r.broadcast("summary_updated", sum)
+	return true
+}
+
+func (r *Runner) executeOutOfBankRow(
+	ctx context.Context,
+	rowNo int,
+	settings model.HumanSettings,
+	prevQueueDelayMs int,
+	prevBreakKind string,
+) bool {
+	row, ok := r.store.GetOutOfBankRow(rowNo)
+	if !ok {
+		return true
+	}
+
+	questionToSend := strings.TrimSpace(row.ProbeQuestion)
+	if questionToSend == "" {
+		return true
+	}
+
+	rowLabel := fmt.Sprintf("DiluarBank #%d", rowNo)
+	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+		ctx,
+		rowLabel,
+		rowNo,
+		settings.BotPhone,
+		questionToSend,
+		settings,
+		r.onTelemetryHook,
+	)
+
+	if askErr != nil {
+		if errors.Is(askErr, context.Canceled) {
+			return false
+		}
+		if errors.Is(askErr, wa.ErrCircuitBreaker) {
+			r.tripCircuitBreaker(rowNo, askErr.Error())
+			return false
+		}
+		r.mu.Lock()
+		r.status.LastError = askErr.Error()
+		r.appendLogLocked("error", rowNo, fmt.Sprintf("Kendala pada %s: %v", rowLabel, askErr))
+		r.mu.Unlock()
+		return true
+	}
+
+	metrics.QueueDelayMs = prevQueueDelayMs
+	metrics.BreakKind = prevBreakKind
+
+	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
+	resStatus, notes := r.aiEngine.EvaluateOutOfBankReply(evalCtx, row, actualReply)
+	evalCancel()
+
+	patch := model.OutOfBankPatch{
+		ActualReply:  &actualReply,
+		Notes:        &notes,
+		ResultStatus: &resStatus,
+		Metrics:      &metrics,
+	}
+	if len(mediaFiles) > 0 {
+		patch.MediaFiles = &mediaFiles
+	}
+
+	updatedOOB, oobSum, saveErr := r.store.UpdateOutOfBankRow(rowNo, patch)
+	if saveErr != nil {
+		r.tripCircuitBreaker(rowNo, fmt.Sprintf("Gagal menyimpan sheet Uji Diluar Bank: %v", saveErr))
+		return false
+	}
+
+	r.recordRowCompletion(rowLabel, rowNo, resStatus, len([]rune(actualReply)))
+	r.broadcast("oob_row_updated", updatedOOB)
+	r.broadcast("oob_summary_updated", oobSum)
+	return true
+}
+
+func (r *Runner) recordRowCompletion(rowLabel string, rowNo int, resStatus string, replyChars int) {
+	r.mu.Lock()
+	r.status.ProcessedInRun++
+	r.telemetry.SinceLastBreak++
+	r.telemetry.SinceLastLongRest++
+	r.appendLogLocked("evaluated", rowNo, fmt.Sprintf("%s selesai -> Status: %s (%d huruf balasan)", rowLabel, resStatus, replyChars))
+	stSnap := r.status
+	telSnap := r.copyTelemetryLocked()
+	r.mu.Unlock()
+
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 }
@@ -457,8 +645,8 @@ func (r *Runner) appendLogLocked(phase string, rowNo int, detail string) {
 		Detail:    detail,
 	}
 	r.telemetry.RecentLogs = append([]model.BehaviorLog{entry}, r.telemetry.RecentLogs...)
-	if len(r.telemetry.RecentLogs) > 45 {
-		r.telemetry.RecentLogs = r.telemetry.RecentLogs[:45]
+	if len(r.telemetry.RecentLogs) > 50 {
+		r.telemetry.RecentLogs = r.telemetry.RecentLogs[:50]
 	}
 }
 

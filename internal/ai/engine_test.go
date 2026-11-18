@@ -124,3 +124,53 @@ func TestEvaluateReplyHandlesAllSpecialCases(t *testing.T) {
 		t.Fatalf("expected Cocok after normalizing corrupted encoding char, got %q (%q)", st, note)
 	}
 }
+
+func TestOutOfBankGenerationAndAntiHallucinationEvaluator(t *testing.T) {
+	eng := newLocalTestEngine()
+	ctx := context.Background()
+
+	bank := []model.TestRow{
+		{
+			No:          1,
+			OPD:         "Dinas Koperasi",
+			Kategori:    "Medan Terkini",
+			StatusBank:  "approved",
+			QuestionRef: "Pasar Tradisional Kota Medan Tahun 2022",
+		},
+		{
+			No:          2,
+			OPD:         "Dinas Pendidikan",
+			Kategori:    "Medan Terkini",
+			StatusBank:  "approved",
+			QuestionRef: "Data Sekolah SMP Kecamatan Medan Denai",
+		},
+	}
+
+	probes := eng.GenerateOutOfBankProbes(ctx, bank, 5, "2026")
+	if len(probes) < 2 {
+		t.Fatalf("expected generated probes, got %d", len(probes))
+	}
+	if probes[0].ForbiddenYear != "2026" || probes[0].ReferenceYear != "2022" || !strings.Contains(probes[0].ProbeQuestion, "2026") {
+		t.Fatalf("expected first probe to mutate 2022 -> 2026, got: %+v", probes[0])
+	}
+
+	yearProbe := probes[0]
+
+	// Case A: Bot honestly says 2026 is not available -> Cocok (Aman)
+	st, note := eng.EvaluateOutOfBankReply(ctx, yearProbe, "Mohon maaf kak, data Pasar Tradisional Kota Medan untuk Tahun 2026 saat ini belum tersedia. Data terbaru yang ada adalah Tahun 2022.")
+	if st != "Cocok" {
+		t.Fatalf("expected Cocok for honest clarification, got %q (%q)", st, note)
+	}
+
+	// Case B: Bot blindly dumps 2022 dataset without mentioning 2026 is unavailable -> Tidak
+	st, note = eng.EvaluateOutOfBankReply(ctx, yearProbe, "*Pasar Tradisional Kota Medan Tahun 2022*\n\nInformasi dataset: https://satudata.medan.go.id/dataset/pasar-tradisional-kota-medan-tahun-2022")
+	if st != "Tidak" || !strings.Contains(note, "2022") {
+		t.Fatalf("expected Tidak for blind wrong-year dump, got %q (%q)", st, note)
+	}
+
+	// Case C: Bot hallucinates 2026 data -> Tidak
+	st, note = eng.EvaluateOutOfBankReply(ctx, yearProbe, "*Pasar Tradisional Kota Medan Tahun 2026*\n\nTerdapat 58 pasar tradisional pada tahun 2026.")
+	if st != "Tidak" || !strings.Contains(strings.ToUpper(note), "HALUSINASI") {
+		t.Fatalf("expected Tidak for hallucinated 2026 answer, got %q (%q)", st, note)
+	}
+}

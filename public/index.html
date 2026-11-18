@@ -12,7 +12,7 @@
       <div class="brand-mark">QA</div>
       <div>
         <h1 class="brand-title">WhatsApp Bot QA Workbench</h1>
-        <p class="brand-sub">Sinkronisasi Excel Otomatis &bull; Simulasi Perilaku Manusia 6-Lapis</p>
+        <p class="brand-sub">Multi-Sheet Sync &bull; 8-Tahap Ritme Manusia Anti-Spam (Jeda Read, Burst Ketik, Istirahat)</p>
       </div>
     </div>
 
@@ -59,7 +59,7 @@
 
         <div class="batch-controls">
           <button id="btnSaveQuickSettings" class="btn btn-secondary" type="button">Simpan Target</button>
-          <button id="btnStartBatch" class="btn btn-success" type="button">Mulai / Lanjut Uji</button>
+          <button id="btnOpenBatchModal" class="btn btn-success" type="button">Mulai / Lanjut Uji (Buka Modal)</button>
           <button id="btnPauseBatch" class="btn btn-warning" type="button" disabled>Jeda</button>
           <button id="btnStopBatch" class="btn btn-danger-outline" type="button" disabled>Berhenti</button>
         </div>
@@ -72,7 +72,7 @@
     <section class="telemetry-panel card">
       <div class="telemetry-header">
         <div class="telemetry-title-wrap">
-          <span class="section-eyebrow">LIVE HUMAN BEHAVIOR MONITOR</span>
+          <span class="section-eyebrow">LIVE HUMAN BEHAVIOR MONITOR — RITME 8-TAHAP ANTI-SPAM</span>
           <div class="telemetry-phase-row">
             <span id="humanPhaseBadge" class="badge badge-neutral">IDLE</span>
             <span id="humanPresenceBadge" class="badge badge-outline">Presence: unavailable</span>
@@ -91,34 +91,34 @@
 
       <div class="telemetry-metrics-grid">
         <div class="metric-mini">
-          <span class="metric-mini-label">Menuju Micro-Break</span>
-          <strong id="tmBreakCounter">0 / 18 soal</strong>
-          <small id="tmBreakSub">0x istirahat diambil</small>
+          <span class="metric-mini-label">Fokus Pre-Think</span>
+          <strong id="tmPreThinkInfo">0.0 dtk</strong>
+          <small id="tmPreThinkRange">Rentang 2.0 - 5.0 dtk</small>
         </div>
         <div class="metric-mini">
-          <span class="metric-mini-label">Simulasi Mengetik</span>
+          <span class="metric-mini-label">Simulasi Ketik Bertahap</span>
           <strong id="tmTypingInfo">0 huruf (0.0 dtk)</strong>
-          <small id="tmTypingRate">~55 ms/huruf proporsional</small>
+          <small id="tmTypingBursts">1 gelombang ketik</small>
         </div>
         <div class="metric-mini">
-          <span class="metric-mini-label">Centang Biru &amp; Baca</span>
+          <span class="metric-mini-label">Jeda Sebelum Read (Abu2)</span>
+          <strong id="tmUnreadInfo">0.0 dtk</strong>
+          <small id="tmUnreadRange">Rentang 2.5 - 8.0 dtk</small>
+        </div>
+        <div class="metric-mini">
+          <span class="metric-mini-label">Membaca Balasan (Biru)</span>
           <strong id="tmReadInfo">0.0 dtk</strong>
-          <small id="tmReadRange">Rentang 2.5 - 6.0 dtk</small>
+          <small id="tmReadRange">Rentang 4.5 - 13.0 dtk</small>
         </div>
         <div class="metric-mini">
           <span class="metric-mini-label">Jeda Antar Soal</span>
           <strong id="tmInterDelay">0.0 dtk</strong>
-          <small id="tmDelayRange">Acak 8.0 - 16.0 dtk</small>
+          <small id="tmDelayRange">15-30 dtk + spike 22%</small>
         </div>
         <div class="metric-mini">
-          <span class="metric-mini-label">Quiet-Window Balasan</span>
-          <strong id="tmQuietInfo">5.0 dtk hening</strong>
-          <small id="tmTimeoutInfo">Batas tunggu 30 dtk</small>
-        </div>
-        <div class="metric-mini">
-          <span class="metric-mini-label">Proteksi Anti-Ban</span>
-          <strong id="tmCircuitState" class="text-ok">Aman (Circuit Normal)</strong>
-          <small id="tmRunnerCounter">Antrean: Idle</small>
+          <span class="metric-mini-label">Micro &amp; Long-Rest</span>
+          <strong id="tmBreakCounter">0 / 15 soal</strong>
+          <small id="tmLongRestCounter">Long-Rest: 0 / 45 soal</small>
         </div>
       </div>
 
@@ -131,7 +131,10 @@
     <!-- Main Navigation Tabs -->
     <nav class="tabs-nav" role="tablist">
       <button class="tab-btn active" data-tab="tab-bank" type="button">
-        Bank Pertanyaan &amp; Uji (<span id="tabCountTotal">0</span>)
+        Bank Pertanyaan Resmi (<span id="tabCountTotal">0</span>)
+      </button>
+      <button class="tab-btn" data-tab="tab-oob" type="button">
+        Sheet Terpisah: Uji Diluar Bank (<span id="tabCountOOB">0</span>)
       </button>
       <button class="tab-btn" data-tab="tab-dashboard" type="button">
         Dashboard &amp; Ringkasan OPD
@@ -141,11 +144,11 @@
       </button>
     </nav>
 
-    <!-- TAB 1: Question Bank & Interactive Testing -->
+    <!-- TAB 1: Official Question Bank & Interactive Testing -->
     <section id="tab-bank" class="tab-section active">
       <div class="kpi-strip">
         <div class="kpi-card">
-          <span class="kpi-label">Total Baris</span>
+          <span class="kpi-label">Total Baris Bank</span>
           <strong id="kpiTotal" class="kpi-num">0</strong>
           <small id="kpiBankSplit">0 approved &bull; 0 waiting</small>
         </div>
@@ -196,8 +199,8 @@
       <div class="table-meta-bar">
         <span id="filteredCountInfo">Menampilkan 0 dari 0 baris</span>
         <div class="table-meta-actions">
-          <button id="btnRerunAllConfirm" class="btn btn-outline btn-sm" type="button" title="Uji ulang dari baris #1 termasuk yang sudah terisi">
-            Uji Ulang Semua (210 Baris)
+          <button id="btnLaunchBankModal" class="btn btn-success btn-sm" type="button">
+            Luncurkan Batch Aman...
           </button>
         </div>
       </div>
@@ -211,19 +214,94 @@
               <th class="col-q">Pertanyaan Acuan vs Diinput</th>
               <th class="col-a">Balasan Sesuai Data (Bank)</th>
               <th class="col-a">Balasan Dikirim Sistem (WA)</th>
+              <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
           <tbody id="qaTableBody">
             <tr>
-              <td colspan="6" class="empty-cell">Memuat data bank pertanyaan...</td>
+              <td colspan="7" class="empty-cell">Memuat data bank pertanyaan...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- TAB 2: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
+    <!-- TAB 2: Separate Sheet: Uji Diluar Bank (Year 2026 / Edge Cases / Anti-Hallucination) -->
+    <section id="tab-oob" class="tab-section">
+      <div class="kpi-strip">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Soal Diluar Bank</span>
+          <strong id="kpiOOBTotal" class="kpi-num">0</strong>
+          <small>Tersimpan di sheet "Uji Diluar Bank"</small>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Progres Diuji</span>
+          <strong id="kpiOOBTested" class="kpi-num">0</strong>
+          <small id="kpiOOBProgressPct">0% selesai</small>
+        </div>
+        <div class="kpi-card kpi-ok">
+          <span class="kpi-label">Aman / Jujur (Cocok)</span>
+          <strong id="kpiOOBCocok" class="kpi-num">0</strong>
+          <small id="kpiOOBSafetyPct">Aman dari halusinasi: 0%</small>
+        </div>
+        <div class="kpi-card kpi-bad">
+          <span class="kpi-label">Halusinasi / Salah (Tidak)</span>
+          <strong id="kpiOOBTidak" class="kpi-num">0</strong>
+          <small>Menjawab data palsu / tanpa klarifikasi</small>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Belum Diuji</span>
+          <strong id="kpiOOBBelum" class="kpi-num">0</strong>
+          <small>Siap dites ke bot</small>
+        </div>
+      </div>
+
+      <div class="card section-card oob-control-card">
+        <div class="section-header-row">
+          <div>
+            <h2>Pengecekan Pertanyaan Diluar Data (Tahun 2026+ / Wilayah Luar / Edge Case)</h2>
+            <p class="muted">
+              Sheet ini <strong>terpisah penuh</strong> dari sheet "Bank Pertanyaan". Contoh: data bank hanya punya <em>Pasar Tradisional 2022</em>, kita uji dengan menanyakan <em>Tahun 2026</em> untuk mengecek apakah bot jujur menolak atau berhalusinasi mengarang data.
+            </p>
+          </div>
+          <div class="oob-actions-group">
+            <button id="btnAutoGenerateOOB" class="btn btn-secondary btn-sm" type="button">
+              + Generate Variasi Tahun 2026 dari Bank
+            </button>
+            <button id="btnOpenNewOOBModal" class="btn btn-outline btn-sm" type="button">
+              + Tambah Soal Manual
+            </button>
+            <button id="btnLaunchOOBBatchModal" class="btn btn-success btn-sm" type="button">
+              Uji Batch Diluar Bank...
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrapper card">
+        <table class="qa-table">
+          <thead>
+            <tr>
+              <th class="col-no">No</th>
+              <th class="col-meta">Sumber &amp; Skenario</th>
+              <th class="col-q">Pertanyaan Acuan vs Diinput (Diluar Bank)</th>
+              <th class="col-a">Perilaku Bot yang Diharapkan</th>
+              <th class="col-a">Balasan Dikirim Sistem</th>
+              <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
+              <th class="col-res">Evaluasi &amp; Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="oobTableBody">
+            <tr>
+              <td colspan="7" class="empty-cell">Belum ada baris uji diluar bank. Klik tombol "+ Generate Variasi Tahun 2026 dari Bank" di atas untuk membuat otomatis.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
     <section id="tab-dashboard" class="tab-section">
       <div class="card section-card">
         <div class="section-header-row">
@@ -250,81 +328,128 @@
       </div>
     </section>
 
-    <!-- TAB 3: Granular Human Behavior Settings & Anti-Ban SOP -->
+    <!-- TAB 4: Granular Human Behavior Settings & Anti-Ban SOP -->
     <section id="tab-human-config" class="tab-section">
       <div class="two-col-grid">
         <div class="card section-card">
           <div class="section-header-row">
             <div>
-              <h2>Parameter Simulasi Perilaku Manusia</h2>
-              <p class="muted">Mengatur ritme centang biru, kecepatan ketik per huruf, jeda baca, dan frekuensi istirahat agar trafik menyerupai penguji manusia asli.</p>
+              <h2>Parameter Simulasi Perilaku Manusia (8-Tahap)</h2>
+              <p class="muted">Mengatur ritme fokus pre-think, ketikan bertahap, jeda sebelum centang biru, jeda baca, distraction spike, micro-break, dan long-rest.</p>
             </div>
           </div>
 
           <div class="preset-bar">
             <span>Preset Cepat:</span>
-            <button type="button" class="btn btn-outline btn-sm" data-preset="standard">Aman Standar (Rekomendasi)</button>
-            <button type="button" class="btn btn-outline btn-sm" data-preset="careful">Ekstra Hati-Hati (Santai)</button>
-            <button type="button" class="btn btn-outline btn-sm" data-preset="brisk">QA Lebih Cepat (Tetap Natural)</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="standard">Ultra-Safe (Rekomendasi Utama)</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="careful">Maksimal Santai (Sangat Pelan)</button>
+            <button type="button" class="btn btn-outline btn-sm" data-preset="brisk">QA Sedang (Tetap Ada Jeda Read)</button>
           </div>
 
           <form id="formHumanSettings" class="settings-form-grid">
             <div class="field-group">
-              <label for="cfgReadMin">Jeda Baca Minimum setelah Centang Biru (ms)</label>
-              <input id="cfgReadMin" type="number" min="500" max="60000" step="100" />
+              <label for="cfgPreThinkMin">Pre-Think Minimum sebelum Ketik (ms)</label>
+              <input id="cfgPreThinkMin" type="number" min="500" max="30000" step="500" />
             </div>
             <div class="field-group">
-              <label for="cfgReadMax">Jeda Baca Maksimum (ms)</label>
-              <input id="cfgReadMax" type="number" min="500" max="60000" step="100" />
+              <label for="cfgPreThinkMax">Pre-Think Maksimum (ms)</label>
+              <input id="cfgPreThinkMax" type="number" min="500" max="30000" step="500" />
             </div>
 
             <div class="field-group">
               <label for="cfgTypingPerChar">Kecepatan Mengetik Rata-rata (ms / karakter)</label>
-              <input id="cfgTypingPerChar" type="number" min="15" max="250" step="5" />
+              <input id="cfgTypingPerChar" type="number" min="20" max="350" step="5" />
             </div>
             <div class="field-group">
               <label for="cfgTypingMin">Batas Minimum Durasi Mengetik (ms)</label>
-              <input id="cfgTypingMin" type="number" min="500" max="30000" step="100" />
+              <input id="cfgTypingMin" type="number" min="1000" max="60000" step="500" />
             </div>
             <div class="field-group">
               <label for="cfgTypingMax">Batas Maksimum Durasi Mengetik (ms)</label>
-              <input id="cfgTypingMax" type="number" min="1000" max="30000" step="100" />
+              <input id="cfgTypingMax" type="number" min="2000" max="60000" step="500" />
+            </div>
+
+            <div class="field-group">
+              <label for="cfgUnreadMin">Jeda Sebelum Buka/Read Chat Min (Centang Abu-Abu) (ms)</label>
+              <input id="cfgUnreadMin" type="number" min="500" max="60000" step="500" />
+            </div>
+            <div class="field-group">
+              <label for="cfgUnreadMax">Jeda Sebelum Buka/Read Chat Maks (ms)</label>
+              <input id="cfgUnreadMax" type="number" min="500" max="60000" step="500" />
+            </div>
+
+            <div class="field-group">
+              <label for="cfgReadMin">Jeda Membaca setelah Centang Biru Min (ms)</label>
+              <input id="cfgReadMin" type="number" min="1000" max="90000" step="500" />
+            </div>
+            <div class="field-group">
+              <label for="cfgReadMax">Jeda Membaca setelah Centang Biru Maks (ms)</label>
+              <input id="cfgReadMax" type="number" min="1000" max="90000" step="500" />
             </div>
 
             <div class="field-group">
               <label for="cfgDelayMin">Jeda Santai Antar Soal Minimum (ms)</label>
-              <input id="cfgDelayMin" type="number" min="2000" max="180000" step="500" />
+              <input id="cfgDelayMin" type="number" min="3000" max="300000" step="1000" />
             </div>
             <div class="field-group">
               <label for="cfgDelayMax">Jeda Santai Antar Soal Maksimum (ms)</label>
-              <input id="cfgDelayMax" type="number" min="2000" max="180000" step="500" />
+              <input id="cfgDelayMax" type="number" min="3000" max="300000" step="1000" />
             </div>
 
             <div class="field-group">
-              <label for="cfgCooldownEveryMin">Micro-Break Setiap Min (jumlah soal)</label>
+              <label for="cfgDistractionSpikePct">Peluang Distraction Spike (%)</label>
+              <input id="cfgDistractionSpikePct" type="number" min="0" max="80" step="1" />
+            </div>
+            <div class="field-group">
+              <label for="cfgDistractionMin">Durasi Distraction Spike Min (ms)</label>
+              <input id="cfgDistractionMin" type="number" min="5000" max="360000" step="1000" />
+            </div>
+            <div class="field-group">
+              <label for="cfgDistractionMax">Durasi Distraction Spike Maks (ms)</label>
+              <input id="cfgDistractionMax" type="number" min="5000" max="360000" step="1000" />
+            </div>
+
+            <div class="field-group">
+              <label for="cfgCooldownEveryMin">Micro-Break Setiap Min (soal)</label>
               <input id="cfgCooldownEveryMin" type="number" min="3" max="250" step="1" />
             </div>
             <div class="field-group">
-              <label for="cfgCooldownEveryMax">Micro-Break Setiap Maks (jumlah soal)</label>
+              <label for="cfgCooldownEveryMax">Micro-Break Setiap Maks (soal)</label>
               <input id="cfgCooldownEveryMax" type="number" min="3" max="250" step="1" />
+            </div>
+            <div class="field-group">
+              <label for="cfgCooldownMin">Durasi Micro-Break Min (ms)</label>
+              <input id="cfgCooldownMin" type="number" min="10000" max="900000" step="5000" />
+            </div>
+            <div class="field-group">
+              <label for="cfgCooldownMax">Durasi Micro-Break Maks (ms)</label>
+              <input id="cfgCooldownMax" type="number" min="10000" max="900000" step="5000" />
             </div>
 
             <div class="field-group">
-              <label for="cfgCooldownMin">Durasi Istirahat Micro-Break Min (ms)</label>
-              <input id="cfgCooldownMin" type="number" min="5000" max="600000" step="1000" />
+              <label for="cfgLongRestEveryMin">Long-Rest Setiap Min (soal)</label>
+              <input id="cfgLongRestEveryMin" type="number" min="15" max="500" step="5" />
             </div>
             <div class="field-group">
-              <label for="cfgCooldownMax">Durasi Istirahat Micro-Break Maks (ms)</label>
-              <input id="cfgCooldownMax" type="number" min="5000" max="600000" step="1000" />
+              <label for="cfgLongRestEveryMax">Long-Rest Setiap Maks (soal)</label>
+              <input id="cfgLongRestEveryMax" type="number" min="15" max="500" step="5" />
+            </div>
+            <div class="field-group">
+              <label for="cfgLongRestMin">Durasi Long-Rest Min (ms)</label>
+              <input id="cfgLongRestMin" type="number" min="30000" max="1800000" step="10000" />
+            </div>
+            <div class="field-group">
+              <label for="cfgLongRestMax">Durasi Long-Rest Maks (ms)</label>
+              <input id="cfgLongRestMax" type="number" min="30000" max="1800000" step="10000" />
             </div>
 
             <div class="field-group">
               <label for="cfgQuietWindow">Quiet-Window Pengumpul Multi-Bubble (ms)</label>
-              <input id="cfgQuietWindow" type="number" min="1500" max="30000" step="500" />
+              <input id="cfgQuietWindow" type="number" min="2000" max="30000" step="500" />
             </div>
             <div class="field-group">
               <label for="cfgReplyTimeout">Batas Waktu Tunggu Balasan Bot (ms)</label>
-              <input id="cfgReplyTimeout" type="number" min="5000" max="180000" step="1000" />
+              <input id="cfgReplyTimeout" type="number" min="5000" max="240000" step="1000" />
             </div>
 
             <div class="settings-submit-row">
@@ -334,33 +459,118 @@
         </div>
 
         <div class="card section-card">
-          <h2>Arsitektur 6-Lapis Anti-Ban &amp; SOP Aman</h2>
+          <h2>Arsitektur 8-Tahap Ritme Manusia Anti-Spam</h2>
           <ol class="sop-list">
             <li>
-              <strong>Gunakan Nomor QA / Sekunder yang Sudah Aktif:</strong>
-              Hindari nomor pribadi utama atau kartu perdana yang baru aktif kurang dari 24 jam.
+              <strong>1. Pre-Think Focus Delay:</strong>
+              Sebelum mengetik, sistem diam sejenak (2.0–5.0 dtk) dalam status <code>Available</code> seperti manusia baru melirik Excel sebelum mengetik.
             </li>
             <li>
-              <strong>Warm-Up Satu Kali Sebelum Batch Pertama:</strong>
-              Simpan nomor Bot target ke kontak HP penguji, lalu kirim 1 chat manual (misal <em>"Halo"</em>) dari HP agar relasi 2-arah tercatat alami.
+              <strong>2. Multi-Burst Typing dengan Kecepatan Acak:</strong>
+              Durasi ketik dihitung proporsional (85–145 ms/karakter) dan dibagi menjadi 2–3 gelombang ketik diselingi jeda mikropikir <code>Paused</code> 1.0–2.5 dtk di tengah kalimat.
             </li>
             <li>
-              <strong>Siklus Presence &amp; Centang Biru Otomatis:</strong>
-              Sistem mengirim status <code>Available</code>, <code>Composing</code> proporsional panjang huruf (termasuk jeda pikir singkat pada kalimat panjang), dan mengirim <code>MarkRead</code> (centang biru) beserta waktu baca setiap kali Bot selesai menjawab.
+              <strong>3. Multi-Bubble Quiet-Window Collector:</strong>
+              Menunggu hening 5.5 dtk (batas 35 dtk) untuk mengumpulkan seluruh gelembung teks, gambar <code>[Berkas]</code>, dan peta <code>[Koordinat]</code>.
             </li>
             <li>
-              <strong>Multi-Bubble Quiet-Window Collector:</strong>
-              Menunggu hingga Bot benar-benar berhenti mengirim teks lanjutan, gambar <code>[Berkas]</code>, atau peta <code>[Koordinat]</code> agar balasan tidak terpotong ke soal berikutnya.
+              <strong>4. Jeda Sebelum Buka/Read Chat (Unread Reaction Delay):</strong>
+              Balasan yang baru masuk <em>TIDAK LANGSUNG</em> dicentang biru. Sistem diam dulu 2.5–8.0 dtk (centang abu-abu) seperti pengguna yang baru menyadari bunyi notifikasi.
             </li>
             <li>
-              <strong>Istirahat Berkala (Micro-Break) &amp; Circuit Breaker:</strong>
-              Setiap 15–25 soal sistem otomatis rehat 45–90 detik. Bila terdeteksi gangguan soket atau pembatasan laju dari WhatsApp, sistem langsung <strong>Pause Otomatis</strong> tanpa melakukan pengulangan paksa.
+              <strong>5. Centang Biru (MarkRead) + Waktu Baca Panjang:</strong>
+              Baru setelah jeda reaksi, centang biru dikirim dan sistem membaca isi teks selama 4.5–13.0 dtk (+ ekstra 2–4 dtk bila ada gambar).
+            </li>
+            <li>
+              <strong>6. Jeda Santai Antar Soal + Distraction Spike:</strong>
+              Jeda antar nomor tidak pernah lurus (15–30 dtk), dengan 22% giliran acak jeda lebih panjang (32–60 dtk) seperti mengecek tabel.
+            </li>
+            <li>
+              <strong>7. Dual-Tier Cooldown (Micro-Break &amp; Long-Rest):</strong>
+              Istirahat rehat 90–165 dtk tiap 12–18 soal, dan istirahat panjang 4–7 menit tiap 40–50 soal dengan status <code>Unavailable</code>.
+            </li>
+            <li>
+              <strong>8. Single Queue Lock &amp; Circuit Breaker:</strong>
+              Semua eksekusi terkunci sekuensial tunggal dan otomatis jeda bila koneksi WhatsApp goyah atau terjadi kendala.
             </li>
           </ol>
         </div>
       </div>
     </section>
   </main>
+
+  <!-- Batch Launch & Accurate Estimator Modal -->
+  <div id="batchModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-medium">
+      <div class="modal-header">
+        <h3 id="batchModalTitle">Luncurkan Sesi Pengujian Batch Paling Aman</h3>
+        <button id="btnCloseBatchModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="batch-recommendation-box">
+          <div class="rec-icon">&#128737;</div>
+          <div>
+            <strong>Rekomendasi Keamanan WhatsApp (Anti-Spam):</strong>
+            <p id="batchRecText" class="muted">
+              Tersisa <strong id="batchRecTotal">0</strong> soal belum diuji. Paling aman jalankan <strong>30 soal per gelombang</strong> (~22 menit) agar irama akun tidak dicurigai sistem spam WhatsApp, lalu istirahat sebentar sebelum gelombang berikutnya.
+            </p>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="inputBatchCount">Jumlah Soal yang Ingin Diuji pada Sesi Ini:</label>
+          <div class="input-with-max">
+            <input id="inputBatchCount" type="number" min="1" max="210" value="30" />
+            <span id="batchMaxLabel" class="max-badge">dari 0 soal sisa</span>
+          </div>
+        </div>
+
+        <div class="quick-count-chips">
+          <span>Pilihan Cepat:</span>
+          <button type="button" class="btn btn-outline btn-xs" data-batch-preset="15">15 Soal (Ekstra Hati-hati)</button>
+          <button type="button" class="btn btn-outline btn-xs" data-batch-preset="30">30 Soal (Sangat Direkomendasikan)</button>
+          <button type="button" class="btn btn-outline btn-xs" data-batch-preset="50">50 Soal</button>
+          <button type="button" class="btn btn-outline btn-xs" data-batch-preset="ALL">Semua Sisa Soal</button>
+        </div>
+
+        <div class="estimation-card">
+          <div class="estimation-header">
+            <span>KALKULASI ESTIMASI WAKTU SELESAI (REAL-TIME)</span>
+            <small>Termasuk pre-think, burst ketik, jeda read, baca, jeda antrean, &amp; istirahat</small>
+          </div>
+
+          <div class="estimation-grid">
+            <div class="est-item fastest">
+              <span class="est-label">Waktu Paling Cepat:</span>
+              <strong id="estFastestDuration">0 menit</strong>
+              <small id="estFastestETA">Selesai sekitar jam --:--</small>
+            </div>
+            <div class="est-item safest">
+              <span class="est-label">Waktu Paling Lama (Paling Aman):</span>
+              <strong id="estSafestDuration">0 menit</strong>
+              <small id="estSafestETA">Selesai sekitar jam --:--</small>
+            </div>
+          </div>
+
+          <div id="estBreakPlan" class="est-break-summary">
+            Jadwal istirahat: 0x Micro-Break (1.5-2.5 mnt) &bull; 0x Long-Rest (4-7 mnt)
+          </div>
+        </div>
+
+        <div class="batch-modal-options">
+          <label class="checkbox-label">
+            <input id="checkForceAllBatch" type="checkbox" />
+            <span>Uji ulang semua baris (termasuk yang sudah berstatus Cocok/Tidak)</span>
+          </label>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btnCancelBatchModal" type="button" class="btn btn-outline">Batal</button>
+          <button id="btnConfirmStartBatch" type="button" class="btn btn-success">Mulai Sesi Pengujian Sekarang</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- WhatsApp Connection Modal -->
   <div id="waModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
@@ -399,11 +609,11 @@
     </div>
   </div>
 
-  <!-- Row Edit Modal (Custom Question / Notes / Answer Inspection) -->
+  <!-- Row Edit Modal (Bank Pertanyaan) -->
   <div id="editModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card modal-wide">
       <div class="modal-header">
-        <h3 id="editModalTitle">Detail &amp; Koreksi Baris</h3>
+        <h3 id="editModalTitle">Detail &amp; Koreksi Baris Bank</h3>
         <button id="btnCloseEditModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
       </div>
       <form id="formEditRow" class="modal-body">
@@ -450,6 +660,75 @@
           <button type="submit" class="btn btn-primary">Simpan ke Excel</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Out-of-Bank Item Create/Edit Modal -->
+  <div id="oobModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3 id="oobModalTitle">Tambah / Edit Soal Uji Diluar Bank</h3>
+        <button id="btnCloseOOBModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <form id="formOOBRow" class="modal-body">
+        <input id="oobRowNo" type="hidden" />
+        <div class="two-col-grid compact-gap">
+          <div class="field-group">
+            <label for="oobSourceRef">Sumber / OPD Acuan</label>
+            <input id="oobSourceRef" type="text" placeholder="Contoh: Ref #1 — Dinas Koperasi" />
+          </div>
+          <div class="field-group">
+            <label for="oobScenarioType">Jenis Skenario Uji</label>
+            <input id="oobScenarioType" type="text" placeholder="Contoh: Tahun Diluar Data (2026) / Wilayah Luar" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="oobBaseQuestion">Pertanyaan Acuan di Bank (Data Asli)</label>
+          <input id="oobBaseQuestion" type="text" placeholder="Contoh: Pasar Tradisional Kota Medan Tahun 2022" />
+        </div>
+        <div class="field-group">
+          <label for="oobProbeQuestion">Pertanyaan Diinput ke Bot (Diluar Bank / Pertanyaan Aneh)</label>
+          <textarea id="oobProbeQuestion" rows="3" placeholder="Contoh: Kak minta data Pasar Tradisional Kota Medan Tahun 2026 dong"></textarea>
+        </div>
+        <div class="field-group">
+          <label for="oobExpectedBehavior">Perilaku Bot yang Diharapkan</label>
+          <textarea id="oobExpectedBehavior" rows="2" placeholder="Bot wajib jujur menyatakan data Tahun 2026 belum tersedia dan tidak boleh berhalusinasi mengarang data."></textarea>
+        </div>
+        <div class="field-group">
+          <label for="oobActualReply">Balasan Dikirim Sistem (WA)</label>
+          <textarea id="oobActualReply" rows="4" placeholder="Balasan aktual dari bot..."></textarea>
+        </div>
+        <div class="two-col-grid compact-gap">
+          <div class="field-group">
+            <label for="oobResultStatus">Status Uji</label>
+            <select id="oobResultStatus">
+              <option value="">Belum Diuji (Kosong)</option>
+              <option value="Cocok">Cocok (Aman / Tidak Halusinasi)</option>
+              <option value="Tidak">Tidak (Halusinasi / Salah)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="oobNotes">Keterangan Evaluasi</label>
+            <input id="oobNotes" type="text" placeholder="Catatan evaluasi kejujuran bot..." />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnReevalOOBModal" class="btn btn-outline">Evaluasi Anti-Halusinasi</button>
+          <button type="submit" class="btn btn-primary">Simpan ke Sheet Uji Diluar Bank</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lightbox Fullscreen Image Preview Modal -->
+  <div id="lightboxModal" class="lightbox-modal hidden" role="dialog" aria-modal="true">
+    <div class="lightbox-container">
+      <img id="lightboxImage" class="lightbox-img" src="" alt="Lampiran Balasan WhatsApp" />
+      <div class="lightbox-toolbar">
+        <span id="lightboxCaption">Lampiran Balasan WhatsApp Bot</span>
+        <a id="lightboxDownloadBtn" href="#" class="btn btn-primary btn-sm" download target="_blank">Unduh Gambar Asli</a>
+        <button id="btnCloseLightbox" class="btn btn-outline btn-sm" type="button" style="color:#ffffff; border-color:#ffffff">Tutup (ESC)</button>
+      </div>
     </div>
   </div>
 

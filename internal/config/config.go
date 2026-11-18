@@ -75,7 +75,7 @@ func Load(envPath string) (*AppConfig, error) {
 
 	cfg := &AppConfig{
 		EnvPath:      envPath,
-		Host:         getStr("HOST", "127.0.0.1"),
+		Host:         getStr("HOST", "0.0.0.0"),
 		Port:         getInt("PORT", 3020),
 		ExcelFile:    getStr("EXCEL_FILE", "Uji-Bank-Pertanyaan-Programmer-4.xlsx"),
 		WASessionDB:  getStr("WA_SESSION_DB", "wa_session.db"),
@@ -84,21 +84,32 @@ func Load(envPath string) (*AppConfig, error) {
 		LLMModel:     getStr("LLM_MODEL", ""),
 		LLMTimeoutMs: getInt("LLM_TIMEOUT_MS", 20000),
 		Settings: model.HumanSettings{
-			BotPhone:         NormalizePhone(getStr("BOT_PHONE", "")),
-			QuestionMode:     normalizeMode(getStr("DEFAULT_QUESTION_MODE", "natural")),
-			ReadDelayMinMs:   getInt("READ_DELAY_MIN_MS", 2500),
-			ReadDelayMaxMs:   getInt("READ_DELAY_MAX_MS", 6000),
-			TypingMsPerChar:  getInt("TYPING_MS_PER_CHAR", 55),
-			TypingMinMs:      getInt("TYPING_MIN_MS", 2000),
-			TypingMaxMs:      getInt("TYPING_MAX_MS", 9000),
-			DelayMinMs:       getInt("DELAY_MIN_MS", 8000),
-			DelayMaxMs:       getInt("DELAY_MAX_MS", 16000),
-			CooldownEveryMin: getInt("COOLDOWN_EVERY_MIN", 15),
-			CooldownEveryMax: getInt("COOLDOWN_EVERY_MAX", 25),
-			CooldownMinMs:    getInt("COOLDOWN_MIN_MS", 45000),
-			CooldownMaxMs:    getInt("COOLDOWN_MAX_MS", 90000),
-			QuietWindowMs:    getInt("QUIET_WINDOW_MS", 5000),
-			ReplyTimeoutMs:   getInt("REPLY_TIMEOUT_MS", 30000),
+			BotPhone:            NormalizePhone(getStr("BOT_PHONE", "")),
+			QuestionMode:        normalizeMode(getStr("DEFAULT_QUESTION_MODE", "natural")),
+			PreThinkMinMs:       getInt("PRE_THINK_MIN_MS", 2000),
+			PreThinkMaxMs:       getInt("PRE_THINK_MAX_MS", 5000),
+			TypingMsPerChar:     getInt("TYPING_MS_PER_CHAR", 105),
+			TypingMinMs:         getInt("TYPING_MIN_MS", 4500),
+			TypingMaxMs:         getInt("TYPING_MAX_MS", 20000),
+			UnreadDelayMinMs:    getInt("UNREAD_DELAY_MIN_MS", 2500),
+			UnreadDelayMaxMs:    getInt("UNREAD_DELAY_MAX_MS", 8000),
+			ReadDelayMinMs:      getInt("READ_DELAY_MIN_MS", 4500),
+			ReadDelayMaxMs:      getInt("READ_DELAY_MAX_MS", 13000),
+			DelayMinMs:          getInt("DELAY_MIN_MS", 15000),
+			DelayMaxMs:          getInt("DELAY_MAX_MS", 30000),
+			DistractionSpikePct: getInt("DISTRACTION_SPIKE_PCT", 22),
+			DistractionMinMs:    getInt("DISTRACTION_MIN_MS", 32000),
+			DistractionMaxMs:    getInt("DISTRACTION_MAX_MS", 60000),
+			CooldownEveryMin:    getInt("COOLDOWN_EVERY_MIN", 12),
+			CooldownEveryMax:    getInt("COOLDOWN_EVERY_MAX", 18),
+			CooldownMinMs:       getInt("COOLDOWN_MIN_MS", 90000),
+			CooldownMaxMs:       getInt("COOLDOWN_MAX_MS", 165000),
+			LongRestEveryMin:    getInt("LONG_REST_EVERY_MIN", 40),
+			LongRestEveryMax:    getInt("LONG_REST_EVERY_MAX", 50),
+			LongRestMinMs:       getInt("LONG_REST_MIN_MS", 240000),
+			LongRestMaxMs:       getInt("LONG_REST_MAX_MS", 420000),
+			QuietWindowMs:       getInt("QUIET_WINDOW_MS", 5500),
+			ReplyTimeoutMs:      getInt("REPLY_TIMEOUT_MS", 35000),
 		},
 	}
 	cfg.Settings = sanitizeSettings(cfg.Settings)
@@ -149,7 +160,7 @@ func (c *AppConfig) AIStatus() model.AIStatus {
 	return model.AIStatus{
 		Enabled:  false,
 		Provider: "Smart Local Heuristic Engine (Gratis / Offline)",
-		Model:    "local-id-qa-v1",
+		Model:    "local-id-qa-v2",
 	}
 }
 
@@ -201,28 +212,62 @@ func clampRange(minVal, maxVal, floorMin, ceilMax int) (int, int) {
 func sanitizeSettings(s model.HumanSettings) model.HumanSettings {
 	s.BotPhone = NormalizePhone(s.BotPhone)
 	s.QuestionMode = normalizeMode(string(s.QuestionMode))
-	s.ReadDelayMinMs, s.ReadDelayMaxMs = clampRange(s.ReadDelayMinMs, s.ReadDelayMaxMs, 500, 60000)
-	if s.TypingMsPerChar < 15 {
-		s.TypingMsPerChar = 15
+
+	if s.PreThinkMinMs == 0 && s.PreThinkMaxMs == 0 {
+		s.PreThinkMinMs, s.PreThinkMaxMs = 2000, 5000
 	}
-	if s.TypingMsPerChar > 250 {
-		s.TypingMsPerChar = 250
+	s.PreThinkMinMs, s.PreThinkMaxMs = clampRange(s.PreThinkMinMs, s.PreThinkMaxMs, 500, 30000)
+
+	if s.TypingMsPerChar < 20 {
+		s.TypingMsPerChar = 20
 	}
-	s.TypingMinMs, s.TypingMaxMs = clampRange(s.TypingMinMs, s.TypingMaxMs, 500, 30000)
-	s.DelayMinMs, s.DelayMaxMs = clampRange(s.DelayMinMs, s.DelayMaxMs, 2000, 180000)
+	if s.TypingMsPerChar > 350 {
+		s.TypingMsPerChar = 350
+	}
+	s.TypingMinMs, s.TypingMaxMs = clampRange(s.TypingMinMs, s.TypingMaxMs, 1000, 60000)
+
+	if s.UnreadDelayMinMs == 0 && s.UnreadDelayMaxMs == 0 {
+		s.UnreadDelayMinMs, s.UnreadDelayMaxMs = 2500, 8000
+	}
+	s.UnreadDelayMinMs, s.UnreadDelayMaxMs = clampRange(s.UnreadDelayMinMs, s.UnreadDelayMaxMs, 500, 60000)
+
+	s.ReadDelayMinMs, s.ReadDelayMaxMs = clampRange(s.ReadDelayMinMs, s.ReadDelayMaxMs, 1000, 90000)
+	s.DelayMinMs, s.DelayMaxMs = clampRange(s.DelayMinMs, s.DelayMaxMs, 3000, 300000)
+
+	if s.DistractionSpikePct < 0 {
+		s.DistractionSpikePct = 0
+	}
+	if s.DistractionSpikePct > 80 {
+		s.DistractionSpikePct = 80
+	}
+	if s.DistractionMinMs == 0 && s.DistractionMaxMs == 0 {
+		s.DistractionMinMs, s.DistractionMaxMs = 32000, 60000
+	}
+	s.DistractionMinMs, s.DistractionMaxMs = clampRange(s.DistractionMinMs, s.DistractionMaxMs, s.DelayMinMs, 360000)
+
 	s.CooldownEveryMin, s.CooldownEveryMax = clampRange(s.CooldownEveryMin, s.CooldownEveryMax, 3, 250)
-	s.CooldownMinMs, s.CooldownMaxMs = clampRange(s.CooldownMinMs, s.CooldownMaxMs, 5000, 600000)
-	if s.QuietWindowMs < 1500 {
-		s.QuietWindowMs = 1500
+	s.CooldownMinMs, s.CooldownMaxMs = clampRange(s.CooldownMinMs, s.CooldownMaxMs, 10000, 900000)
+
+	if s.LongRestEveryMin == 0 && s.LongRestEveryMax == 0 {
+		s.LongRestEveryMin, s.LongRestEveryMax = 40, 50
+	}
+	s.LongRestEveryMin, s.LongRestEveryMax = clampRange(s.LongRestEveryMin, s.LongRestEveryMax, 15, 500)
+	if s.LongRestMinMs == 0 && s.LongRestMaxMs == 0 {
+		s.LongRestMinMs, s.LongRestMaxMs = 240000, 420000
+	}
+	s.LongRestMinMs, s.LongRestMaxMs = clampRange(s.LongRestMinMs, s.LongRestMaxMs, 30000, 1800000)
+
+	if s.QuietWindowMs < 2000 {
+		s.QuietWindowMs = 2000
 	}
 	if s.QuietWindowMs > 30000 {
 		s.QuietWindowMs = 30000
 	}
-	if s.ReplyTimeoutMs < s.QuietWindowMs+3000 {
-		s.ReplyTimeoutMs = s.QuietWindowMs + 3000
+	if s.ReplyTimeoutMs < s.QuietWindowMs+4000 {
+		s.ReplyTimeoutMs = s.QuietWindowMs + 4000
 	}
-	if s.ReplyTimeoutMs > 180000 {
-		s.ReplyTimeoutMs = 180000
+	if s.ReplyTimeoutMs > 240000 {
+		s.ReplyTimeoutMs = 240000
 	}
 	return s
 }
@@ -231,17 +276,28 @@ func persistEnvSettings(envPath string, s model.HumanSettings) error {
 	updates := map[string]string{
 		"BOT_PHONE":             s.BotPhone,
 		"DEFAULT_QUESTION_MODE": string(s.QuestionMode),
-		"READ_DELAY_MIN_MS":     strconv.Itoa(s.ReadDelayMinMs),
-		"READ_DELAY_MAX_MS":     strconv.Itoa(s.ReadDelayMaxMs),
+		"PRE_THINK_MIN_MS":      strconv.Itoa(s.PreThinkMinMs),
+		"PRE_THINK_MAX_MS":      strconv.Itoa(s.PreThinkMaxMs),
 		"TYPING_MS_PER_CHAR":    strconv.Itoa(s.TypingMsPerChar),
 		"TYPING_MIN_MS":         strconv.Itoa(s.TypingMinMs),
 		"TYPING_MAX_MS":         strconv.Itoa(s.TypingMaxMs),
+		"UNREAD_DELAY_MIN_MS":   strconv.Itoa(s.UnreadDelayMinMs),
+		"UNREAD_DELAY_MAX_MS":   strconv.Itoa(s.UnreadDelayMaxMs),
+		"READ_DELAY_MIN_MS":     strconv.Itoa(s.ReadDelayMinMs),
+		"READ_DELAY_MAX_MS":     strconv.Itoa(s.ReadDelayMaxMs),
 		"DELAY_MIN_MS":          strconv.Itoa(s.DelayMinMs),
 		"DELAY_MAX_MS":          strconv.Itoa(s.DelayMaxMs),
+		"DISTRACTION_SPIKE_PCT": strconv.Itoa(s.DistractionSpikePct),
+		"DISTRACTION_MIN_MS":    strconv.Itoa(s.DistractionMinMs),
+		"DISTRACTION_MAX_MS":    strconv.Itoa(s.DistractionMaxMs),
 		"COOLDOWN_EVERY_MIN":    strconv.Itoa(s.CooldownEveryMin),
 		"COOLDOWN_EVERY_MAX":    strconv.Itoa(s.CooldownEveryMax),
 		"COOLDOWN_MIN_MS":       strconv.Itoa(s.CooldownMinMs),
 		"COOLDOWN_MAX_MS":       strconv.Itoa(s.CooldownMaxMs),
+		"LONG_REST_EVERY_MIN":   strconv.Itoa(s.LongRestEveryMin),
+		"LONG_REST_EVERY_MAX":   strconv.Itoa(s.LongRestEveryMax),
+		"LONG_REST_MIN_MS":      strconv.Itoa(s.LongRestMinMs),
+		"LONG_REST_MAX_MS":      strconv.Itoa(s.LongRestMaxMs),
 		"QUIET_WINDOW_MS":       strconv.Itoa(s.QuietWindowMs),
 		"REPLY_TIMEOUT_MS":      strconv.Itoa(s.ReplyTimeoutMs),
 	}
