@@ -1,0 +1,17 @@
+# Secrets & local config
+.env
+
+# WhatsApp SQLite session files
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary & backup Excel files
+*.tmp
+*.backup.xlsx
+
+# Compiled binary
+wa-bot-tester
+
+# Windows metadata artifact
+*:Zone.Identifier
