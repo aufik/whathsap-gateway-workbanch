@@ -76,10 +76,14 @@ func (r *Runner) Telemetry() model.HumanTelemetry {
 }
 
 func normalizeTargetSheet(raw string) string {
-	if strings.TrimSpace(strings.ToLower(raw)) == model.SheetTargetOutOfBank {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case model.SheetTargetOutOfBank:
 		return model.SheetTargetOutOfBank
+	case model.SheetTargetStress:
+		return model.SheetTargetStress
+	default:
+		return model.SheetTargetBank
 	}
-	return model.SheetTargetBank
 }
 
 func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeFrom, rangeTo int) error {
@@ -107,6 +111,18 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeF
 				return fmt.Errorf("tidak ada soal Uji Diluar Bank dalam rentang #%d s/d #%d yang dapat diuji", rangeFrom, rangeTo)
 			}
 			return errors.New("tidak ada soal Uji Diluar Bank yang belum diuji (tambahkan/generate soal terlebih dahulu)")
+		}
+	} else if sheet == model.SheetTargetStress {
+		if isRangeMode {
+			queue = r.store.PendingStressRange(rangeFrom, rangeTo, forceAll)
+		} else {
+			queue = r.store.PendingStressNumbers(forceAll, limit)
+		}
+		if len(queue) == 0 {
+			if isRangeMode {
+				return fmt.Errorf("tidak ada soal Uji Stress AI dalam rentang #%d s/d #%d yang dapat diuji", rangeFrom, rangeTo)
+			}
+			return errors.New("tidak ada soal Uji Stress AI yang belum diuji (bangkitkan soal terlebih dahulu)")
 		}
 	} else {
 		if isRangeMode {
@@ -151,6 +167,8 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeF
 	sheetLabel := "Bank Pertanyaan"
 	if sheet == model.SheetTargetOutOfBank {
 		sheetLabel = "Sheet Uji Diluar Bank"
+	} else if sheet == model.SheetTargetStress {
+		sheetLabel = "Sheet Uji Stress AI"
 	}
 	desc := fmt.Sprintf("%d soal dipilih", len(queue))
 	if isRangeMode {
@@ -182,6 +200,10 @@ func (r *Runner) RunSingleRow(targetSheet string, rowNo int) error {
 	if sheet == model.SheetTargetOutOfBank {
 		if _, ok := r.store.GetOutOfBankRow(rowNo); !ok {
 			return fmt.Errorf("baris Uji Diluar Bank #%d tidak ditemukan", rowNo)
+		}
+	} else if sheet == model.SheetTargetStress {
+		if _, ok := r.store.GetStressTestRow(rowNo); !ok {
+			return fmt.Errorf("baris Uji Stress AI #%d tidak ditemukan", rowNo)
 		}
 	} else {
 		if _, ok := r.store.GetRow(rowNo); !ok {
@@ -303,6 +325,8 @@ func (r *Runner) runQueueWorker(ctx context.Context, sheet string, queue []int, 
 		var okStep bool
 		if sheet == model.SheetTargetOutOfBank {
 			okStep = r.executeOutOfBankRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
+		} else if sheet == model.SheetTargetStress {
+			okStep = r.executeStressTestRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
 		} else {
 			okStep = r.executeBankRow(ctx, rowNo, isBatch, settings, prevQueueDelayMs, prevBreakKind)
 		}
@@ -586,6 +610,80 @@ func (r *Runner) executeOutOfBankRow(
 	r.recordRowCompletion(rowLabel, rowNo, resStatus, len([]rune(actualReply)))
 	r.broadcast("oob_row_updated", updatedOOB)
 	r.broadcast("oob_summary_updated", oobSum)
+	return true
+}
+
+func (r *Runner) executeStressTestRow(
+	ctx context.Context,
+	rowNo int,
+	settings model.HumanSettings,
+	prevQueueDelayMs int,
+	prevBreakKind string,
+) bool {
+	row, ok := r.store.GetStressTestRow(rowNo)
+	if !ok {
+		return true
+	}
+
+	questionToSend := strings.TrimSpace(row.UserPromptQ)
+	if questionToSend == "" {
+		return true
+	}
+
+	rowLabel := fmt.Sprintf("Stress #%d", rowNo)
+	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+		ctx,
+		rowLabel,
+		rowNo,
+		settings.BotPhone,
+		questionToSend,
+		settings,
+		r.onTelemetryHook,
+	)
+
+	if askErr != nil {
+		if errors.Is(askErr, context.Canceled) {
+			return false
+		}
+		if errors.Is(askErr, wa.ErrCircuitBreaker) {
+			r.tripCircuitBreaker(rowNo, askErr.Error())
+			return false
+		}
+		r.mu.Lock()
+		r.status.LastError = askErr.Error()
+		r.appendLogLocked("error", rowNo, fmt.Sprintf("Kendala pada %s: %v", rowLabel, askErr))
+		r.mu.Unlock()
+		return true
+	}
+
+	metrics.QueueDelayMs = prevQueueDelayMs
+	metrics.BreakKind = prevBreakKind
+
+	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
+	resStatus, notes, score, hal := r.aiEngine.EvaluateStressReply(evalCtx, row, actualReply)
+	evalCancel()
+
+	patch := model.StressTestPatch{
+		ActualReply:      &actualReply,
+		Notes:            &notes,
+		ResultStatus:     &resStatus,
+		PolitenessScore:  &score,
+		HallucinationLvl: &hal,
+		Metrics:          &metrics,
+	}
+	if len(mediaFiles) > 0 {
+		patch.MediaFiles = &mediaFiles
+	}
+
+	updatedStress, stressSum, saveErr := r.store.UpdateStressTestRow(rowNo, patch)
+	if saveErr != nil {
+		r.tripCircuitBreaker(rowNo, fmt.Sprintf("Gagal menyimpan sheet Uji Stress AI: %v", saveErr))
+		return false
+	}
+
+	r.recordRowCompletion(rowLabel, rowNo, resStatus, len([]rune(actualReply)))
+	r.broadcast("stress_row_updated", updatedStress)
+	r.broadcast("stress_summary_updated", stressSum)
 	return true
 }
 

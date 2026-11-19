@@ -868,6 +868,19 @@ textarea:focus {
   height: 15px;
 }
 
+/* Tab Stress AI Special Styling */
+.tab-btn.tab-btn-stress {
+  color: #6d28d9;
+}
+.tab-btn.tab-btn-stress.active {
+  color: #5b21b6;
+  border-bottom-color: #5b21b6;
+}
+.stress-control-card {
+  padding: 14px 18px;
+  border-left: 4px solid #7c3aed;
+}
+
 /* Out-of-Bank Controls */
 .oob-control-card {
   padding: 14px 18px;

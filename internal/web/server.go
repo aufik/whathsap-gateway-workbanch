@@ -83,6 +83,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/oob/delete-batch", s.handleOOBDeleteBatch)
 	mux.HandleFunc("POST /api/oob/clear-all", s.handleOOBClearAll)
 
+	// Separate Sheet: Uji Stress AI (Curhat, Absurd, Ambigu, Emosi, Mitos)
+	mux.HandleFunc("POST /api/stress/generate", s.handleStressGenerate)
+	mux.HandleFunc("POST /api/stress/rows", s.handleStressCreate)
+	mux.HandleFunc("POST /api/stress/rows/{no}/run", s.handleStressRowRun)
+	mux.HandleFunc("POST /api/stress/rows/{no}/evaluate", s.handleStressRowEvaluate)
+	mux.HandleFunc("PATCH /api/stress/rows/{no}", s.handleStressRowPatch)
+	mux.HandleFunc("DELETE /api/stress/rows/{no}", s.handleStressRowDelete)
+	mux.HandleFunc("POST /api/stress/delete-batch", s.handleStressDeleteBatch)
+	mux.HandleFunc("POST /api/stress/clear-all", s.handleStressClearAll)
+
 	// LLM Diagnostic & Runtime Environment Reload
 	mux.HandleFunc("POST /api/llm/test", s.handleLLMTest)
 	mux.HandleFunc("POST /api/settings/reload-env", s.handleReloadEnv)
@@ -100,16 +110,19 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
 	rows, sum := s.store.Snapshot()
 	oobRows, oobSum := s.store.OutOfBankSnapshot()
+	stressRows, stressSum := s.store.StressTestSnapshot()
 	snap := model.AppStateSnapshot{
-		Settings:         s.cfg.GetSettings(),
-		AI:               s.cfg.AIStatus(),
-		WA:               s.waClient.Status(),
-		Runner:           s.runner.Status(),
-		Telemetry:        s.runner.Telemetry(),
-		Summary:          sum,
-		Rows:             rows,
-		OutOfBankSummary: oobSum,
-		OutOfBankRows:    oobRows,
+		Settings:          s.cfg.GetSettings(),
+		AI:                s.cfg.AIStatus(),
+		WA:                s.waClient.Status(),
+		Runner:            s.runner.Status(),
+		Telemetry:         s.runner.Telemetry(),
+		Summary:           sum,
+		Rows:              rows,
+		OutOfBankSummary:  oobSum,
+		OutOfBankRows:     oobRows,
+		StressTestSummary: stressSum,
+		StressTestRows:    stressRows,
 	}
 	writeJSON(w, http.StatusOK, snap)
 }
@@ -548,6 +561,208 @@ func (s *Server) handleOOBClearAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleStressGenerate(w http.ResponseWriter, r *http.Request) {
+	var req ai.StressGenRequest
+	_ = decodeJSON(r, &req)
+	if req.Count <= 0 {
+		req.Count = 15
+	}
+
+	bankRows, _ := s.store.Snapshot()
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	candidates := s.aiEngine.GenerateStressProbes(ctx, bankRows, req)
+	rows, sum, err := s.store.AppendStressTestRows(candidates)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("stress_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleStressCreate(w http.ResponseWriter, r *http.Request) {
+	var item model.StressTestRow
+	if err := decodeJSON(r, &item); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(item.UserPromptQ) == "" {
+		writeErr(w, http.StatusBadRequest, errors.New("kalimat pertanyaan uji stress/curhat wajib diisi"))
+		return
+	}
+	if strings.TrimSpace(item.StressCategory) == "" {
+		item.StressCategory = "Stress Test Manual"
+	}
+	if strings.TrimSpace(item.ExpectedBehavior) == "" {
+		item.ExpectedBehavior = "Bot menolak sopan / meluruskan batasan layanan / tidak larut dalam curhat."
+	}
+
+	rows, sum, err := s.store.AppendStressTestRows([]model.StressTestRow{item})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("stress_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleStressRowRun(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.runner.RunSingleRow(model.SheetTargetStress, no); err != nil {
+		code := http.StatusBadRequest
+		if errors.Is(err, runner.ErrAlreadyRunning) {
+			code = http.StatusConflict
+		}
+		writeErr(w, code, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.runner.Status())
+}
+
+func (s *Server) handleStressRowEvaluate(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	row, ok := s.store.GetStressTestRow(no)
+	if !ok {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("baris Uji Stress AI #%d tidak ditemukan", no))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
+	defer cancel()
+	status, notes, score, hal := s.aiEngine.EvaluateStressReply(ctx, row, row.ActualReply)
+
+	updated, sum, err := s.store.UpdateStressTestRow(no, model.StressTestPatch{
+		ResultStatus:     &status,
+		Notes:            &notes,
+		PolitenessScore:  &score,
+		HallucinationLvl: &hal,
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("stress_row_updated", updated)
+	s.broker.Broadcast("stress_summary_updated", sum)
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleStressRowPatch(w http.ResponseWriter, r *http.Request) {
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	var patch model.StressTestPatch
+	if err := decodeJSON(r, &patch); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	updated, sum, err := s.store.UpdateStressTestRow(no, patch)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.broker.Broadcast("stress_row_updated", updated)
+	s.broker.Broadcast("stress_summary_updated", sum)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"row":     updated,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleStressRowDelete(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum menghapus baris"))
+		return
+	}
+	no, err := parseRowNo(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	rows, sum, err := s.store.DeleteStressTestRow(no)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.broker.Broadcast("stress_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleStressDeleteBatch(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum menghapus baris"))
+		return
+	}
+	var req struct {
+		Numbers []int `json:"numbers"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	rows, sum, err := s.store.DeleteStressTestBatch(req.Numbers)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("stress_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleStressClearAll(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum mengosongkan baris"))
+		return
+	}
+	rows, sum, err := s.store.ClearStressTest()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("stress_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
 func (s *Server) handleLLMTest(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
@@ -623,17 +838,22 @@ func (s *Server) handleExcelUpload(w http.ResponseWriter, r *http.Request) {
 	s.cfg.SetExcelFile(s.store.FilePath())
 	rows, _ := s.store.Snapshot()
 	oobRows, oobSum := s.store.OutOfBankSnapshot()
+	stressRows, stressSum := s.store.StressTestSnapshot()
 	s.broker.Broadcast("workbook_reloaded", map[string]any{
-		"summary":          sum,
-		"rows":             rows,
-		"outOfBankSummary": oobSum,
-		"outOfBankRows":    oobRows,
+		"summary":           sum,
+		"rows":              rows,
+		"outOfBankSummary":  oobSum,
+		"outOfBankRows":     oobRows,
+		"stressTestSummary": stressSum,
+		"stressTestRows":    stressRows,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{
-		"summary":          sum,
-		"rows":             rows,
-		"outOfBankSummary": oobSum,
-		"outOfBankRows":    oobRows,
+		"summary":           sum,
+		"rows":              rows,
+		"outOfBankSummary":  oobSum,
+		"outOfBankRows":     oobRows,
+		"stressTestSummary": stressSum,
+		"stressTestRows":    stressRows,
 	})
 }
 

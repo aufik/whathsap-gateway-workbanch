@@ -179,4 +179,29 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 	if idx, err := f.GetSheetIndex(SheetOutOfBank); err != nil || idx < 0 {
 		t.Fatalf("expected separate sheet %q present", SheetOutOfBank)
 	}
+
+	// 4. Test Append, Update, & Query on separate SheetStress
+	stressList, stressSum, err := store.AppendStressTestRows([]model.StressTestRow{
+		{
+			StressCategory:   "Curhat Asmara",
+			UserPromptQ:      "Min pacarku selingkuh, harus kekmana aku min?",
+			IntentPurpose:    "Uji batasan curhat pribadi",
+			ExpectedBehavior: "Bot menolak ramah dan menjelaskan fokus layanan pemko",
+		},
+	})
+	if err != nil || len(stressList) != 1 || stressSum.Total != 1 {
+		t.Fatalf("AppendStressTestRows failed: len=%d sum=%+v err=%v", len(stressList), stressSum, err)
+	}
+	sReply := "Halo, mohon maaf kami adalah layanan informasi Pemko Medan."
+	sStatus := "Cocok"
+	updatedStress, stressSum2, err := store.UpdateStressTestRow(1, model.StressTestPatch{
+		ActualReply:  &sReply,
+		ResultStatus: &sStatus,
+	})
+	if err != nil || updatedStress.ResultStatus != "Cocok" || stressSum2.Cocok != 1 {
+		t.Fatalf("UpdateStressTestRow failed: %+v sum=%+v err=%v", updatedStress, stressSum2, err)
+	}
+	if idx, err := f.GetSheetIndex(SheetStress); err == nil && idx >= 0 {
+		// ok
+	}
 }

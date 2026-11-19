@@ -12,6 +12,7 @@ const (
 const (
 	SheetTargetBank      = "bank"
 	SheetTargetOutOfBank = "out_of_bank"
+	SheetTargetStress    = "stress_test"
 )
 
 type RowHumanMetrics struct {
@@ -96,6 +97,47 @@ type OutOfBankSummary struct {
 	Tested      int     `json:"tested"`
 	ProgressPct float64 `json:"progressPct"`
 	SafetyPct   float64 `json:"safetyPct"`
+}
+
+type StressTestRow struct {
+	No               int             `json:"no"`
+	ExcelRow         int             `json:"excelRow"`
+	StressCategory   string          `json:"stressCategory"`
+	UserPromptQ      string          `json:"userPromptQ"`
+	IntentPurpose    string          `json:"intentPurpose"`
+	ExpectedBehavior string          `json:"expectedBehavior"`
+	ActualReply      string          `json:"actualReply"`
+	HumanSummary     string          `json:"humanSummary"`
+	Notes            string          `json:"notes"`
+	ResultStatus     string          `json:"resultStatus"`
+	PolitenessScore  int             `json:"politenessScore,omitempty"`
+	HallucinationLvl string          `json:"hallucinationLvl,omitempty"`
+	MediaFiles       []string        `json:"mediaFiles,omitempty"`
+	Metrics          RowHumanMetrics `json:"metrics"`
+}
+
+type StressTestPatch struct {
+	StressCategory   *string          `json:"stressCategory,omitempty"`
+	UserPromptQ      *string          `json:"userPromptQ,omitempty"`
+	IntentPurpose    *string          `json:"intentPurpose,omitempty"`
+	ExpectedBehavior *string          `json:"expectedBehavior,omitempty"`
+	ActualReply      *string          `json:"actualReply,omitempty"`
+	Notes            *string          `json:"notes,omitempty"`
+	ResultStatus     *string          `json:"resultStatus,omitempty"`
+	PolitenessScore  *int             `json:"politenessScore,omitempty"`
+	HallucinationLvl *string          `json:"hallucinationLvl,omitempty"`
+	MediaFiles       *[]string        `json:"mediaFiles,omitempty"`
+	Metrics          *RowHumanMetrics `json:"metrics,omitempty"`
+}
+
+type StressTestSummary struct {
+	Total       int     `json:"total"`
+	Cocok       int     `json:"cocok"`
+	Tidak       int     `json:"tidak"`
+	BelumDiuji  int     `json:"belumDiuji"`
+	Tested      int     `json:"tested"`
+	ProgressPct float64 `json:"progressPct"`
+	ResiliencePct float64 `json:"resiliencePct"`
 }
 
 type OPDSummary struct {
@@ -214,15 +256,17 @@ type AIStatus struct {
 }
 
 type AppStateSnapshot struct {
-	Settings         HumanSettings    `json:"settings"`
-	AI               AIStatus         `json:"ai"`
-	WA               WAStatus         `json:"wa"`
-	Runner           RunnerStatus     `json:"runner"`
-	Telemetry        HumanTelemetry   `json:"telemetry"`
-	Summary          OverallSummary   `json:"summary"`
-	Rows             []TestRow        `json:"rows"`
-	OutOfBankSummary OutOfBankSummary `json:"outOfBankSummary"`
-	OutOfBankRows    []OutOfBankRow   `json:"outOfBankRows"`
+	Settings          HumanSettings     `json:"settings"`
+	AI                AIStatus          `json:"ai"`
+	WA                WAStatus          `json:"wa"`
+	Runner            RunnerStatus      `json:"runner"`
+	Telemetry         HumanTelemetry    `json:"telemetry"`
+	Summary           OverallSummary    `json:"summary"`
+	Rows              []TestRow         `json:"rows"`
+	OutOfBankSummary  OutOfBankSummary  `json:"outOfBankSummary"`
+	OutOfBankRows     []OutOfBankRow    `json:"outOfBankRows"`
+	StressTestSummary StressTestSummary `json:"stressTestSummary"`
+	StressTestRows    []StressTestRow   `json:"stressTestRows"`
 }
 
 type SSEEvent struct {

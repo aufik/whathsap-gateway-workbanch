@@ -140,6 +140,9 @@
       <button class="tab-btn" data-tab="tab-oob" type="button">
         Sheet Terpisah: Uji Diluar Bank (<span id="tabCountOOB">0</span>)
       </button>
+      <button class="tab-btn tab-btn-stress" data-tab="tab-stress" type="button">
+        Sheet Terpisah: Uji Stress AI (<span id="tabCountStress">0</span>)
+      </button>
       <button class="tab-btn" data-tab="tab-dashboard" type="button">
         Dashboard &amp; Ringkasan OPD
       </button>
@@ -322,7 +325,98 @@
       </div>
     </section>
 
-    <!-- TAB 3: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
+    <!-- TAB 3: Separate Sheet: Uji Stress AI (Curhat, Absurd, Ambigu, Emosi, Mitos) -->
+    <section id="tab-stress" class="tab-section">
+      <div class="kpi-strip">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Soal Stress Test</span>
+          <strong id="kpiStressTotal" class="kpi-num">0</strong>
+          <small>Tersimpan di sheet "Uji Stress AI"</small>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Progres Diuji</span>
+          <strong id="kpiStressTested" class="kpi-num">0</strong>
+          <small id="kpiStressProgressPct">0% selesai</small>
+        </div>
+        <div class="kpi-card kpi-ok">
+          <span class="kpi-label">Lolos / Tahan Uji (Cocok)</span>
+          <strong id="kpiStressCocok" class="kpi-num">0</strong>
+          <small id="kpiStressResiliencePct">Ketahanan AI: 0%</small>
+        </div>
+        <div class="kpi-card kpi-bad">
+          <span class="kpi-label">Gagal / Baper / Halusinasi</span>
+          <strong id="kpiStressTidak" class="kpi-num">0</strong>
+          <small>Larut curhat / tahayul / terpancing</small>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Belum Diuji</span>
+          <strong id="kpiStressBelum" class="kpi-num">0</strong>
+          <small>Siap dites ke bot</small>
+        </div>
+      </div>
+
+      <div class="card section-card stress-control-card">
+        <div class="section-header-row">
+          <div>
+            <h2>Uji Ketahanan &amp; Nalar AI (Curhat, Ngaco, Absurd, Ambigu, &amp; Emosi)</h2>
+            <p class="muted">
+              Sheet ini <strong>terpisah penuh di sebelah kanan</strong> sheet "Uji Diluar Bank". Dirancang untuk menguji kecerdasan emosional dan batasan nalar bot saat menghadapi warga yang curhat asmara, bertanya hal mustahil/absurd, typo parah, maupun memancing emosi.
+            </p>
+          </div>
+          <div class="oob-actions-group">
+            <button id="btnOpenStressGenModal" class="btn btn-primary btn-sm" type="button" style="background:#5b21b6; border-color:#4c1d95">
+              🎭 Generate Skenario Curhat &amp; Stress Test
+            </button>
+            <button id="btnOpenNewStressModal" class="btn btn-outline btn-sm" type="button">
+              + Tambah Soal Manual
+            </button>
+            <button id="btnLaunchStressBatchModal" class="btn btn-success btn-sm" type="button">
+              Uji Batch Stress AI...
+            </button>
+          </div>
+        </div>
+
+        <!-- Floating Bulk Action Toolbar for Stress Sheet -->
+        <div id="stressBulkToolbar" class="bulk-toolbar hidden">
+          <span class="bulk-count-label">Terpilih: <strong id="stressSelectedCount">0</strong> soal</span>
+          <div class="bulk-actions-btns">
+            <button id="btnDeleteSelectedStress" class="btn btn-danger-outline btn-xs" type="button">
+              🗑 Hapus Terpilih
+            </button>
+            <button id="btnClearAllStress" class="btn btn-danger-outline btn-xs" type="button">
+              ⚠️ Kosongkan Semua Soal Stress AI
+            </button>
+            <button id="btnCancelSelectStress" class="btn btn-outline btn-xs" type="button">
+              Batal Pilih
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrapper card">
+        <table class="qa-table">
+          <thead>
+            <tr>
+              <th class="col-check"><input type="checkbox" id="checkAllStress" title="Pilih Semua Baris Stress Test" /></th>
+              <th class="col-no">No</th>
+              <th class="col-meta">Kategori &amp; Maksud</th>
+              <th class="col-q">Pertanyaan Chat Warga (Diinput ke Bot)</th>
+              <th class="col-a">Perilaku Bot yang Diharapkan</th>
+              <th class="col-a">Balasan Dikirim Sistem</th>
+              <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
+              <th class="col-res">Evaluasi &amp; Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="stressTableBody">
+            <tr>
+              <td colspan="8" class="empty-cell">Belum ada baris uji stress AI. Klik tombol "🎭 Generate Skenario Curhat &amp; Stress Test" di atas untuk membuat otomatis.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
     <section id="tab-dashboard" class="tab-section">
       <div class="card section-card">
         <div class="section-header-row">
@@ -847,6 +941,131 @@
         <div class="modal-footer">
           <button type="button" id="btnCancelOOBGenModal" class="btn btn-outline">Batal</button>
           <button type="submit" id="btnSubmitOOBGen" class="btn btn-primary">✨ Bangkitkan Soal Sekarang</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stress Test Advanced Generator Modal (Curhat, Absurd, Ambigu, Emosi) -->
+  <div id="stressGenModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-medium">
+      <div class="modal-header">
+        <h3 style="color:#5b21b6">🎭 Generator Skenario Curhat &amp; Stress Test AI</h3>
+        <button id="btnCloseStressGenModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <form id="formStressGenerate" class="modal-body">
+        <div class="oob-engine-indicator">
+          <span>Mesin Generator:</span>
+          <strong id="stressGenEngineBadge" class="info-pill" style="display:inline-block">Memuat status engine...</strong>
+        </div>
+
+        <div class="field-group">
+          <label for="stressPromptInput">Instruksi / Topik Curhat &amp; Uji Khusus (Opsional):</label>
+          <textarea id="stressPromptInput" rows="3" placeholder="Contoh: 'Warga patah hati diselingkuhi minta bantuan pemko', 'Tanya kenapa harga jodoh mahal di Medan', 'Warga marah-marah ngatain bot lelet'"></textarea>
+          <small class="muted">Jika kosong, generator otomatis mengambil kombinasi skenario curated khas Medan.</small>
+        </div>
+
+        <div class="field-group">
+          <label>Pilih Ragam Skenario Stress Test:</label>
+          <div class="scenarios-checkbox-grid">
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="curhat" checked />
+              <span>Curhat Asmara / Kehidupan Pribadi / Pinjam Duit</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="absurd" checked />
+              <span>Pertanyaan Absurd / Non-Sense / Mustahil</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="ambigu" checked />
+              <span>Kalimat Ambigu / Typo Jari Parah / Satu Kata</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="emosi" checked />
+              <span>Provokasi Emosi / Komplain Kasar / Spam "P"</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="mitos" checked />
+              <span>Tahayul / Hantu / Siluman Sungai Deli / Dukun</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="stressCatCheck" value="multi" checked />
+              <span>Multi-Topik Campur Aduk (3 pertanyaan sekaligus)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="stressGenCount">Jumlah Soal yang Dibuat:</label>
+          <input id="stressGenCount" type="number" min="1" max="100" value="15" />
+        </div>
+
+        <div class="quick-count-chips">
+          <span>Preset Cepat:</span>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-preset="Pacarku selingkuh min, hancur hatiku, apa ada bansos untuk orang patah hati?">Curhat Asmara</button>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-preset="Berapa berat total seluruh aspal jalan di Kota Medan min?">Tanya Absurd</button>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-preset="Woi bot lambat kali kelen balas! Gak guna kali dinas ini bubarin aja!">Provokasi Emosi</button>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-preset="min tlg bntu yg kmrn d sna yg itunya ilang cr bkin lg gmn">Ambigu Parah</button>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelStressGenModal" class="btn btn-outline">Batal</button>
+          <button type="submit" id="btnSubmitStressGen" class="btn btn-primary" style="background:#5b21b6; border-color:#4c1d95">
+            🎭 Bangkitkan Skenario Curhat &amp; Stress Sekarang
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stress Test Item Edit/Create Modal -->
+  <div id="stressEditModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3 id="stressEditModalTitle">Detail &amp; Koreksi Soal Stress Test AI</h3>
+        <button id="btnCloseStressEditModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <form id="formStressRow" class="modal-body">
+        <input id="stressRowNo" type="hidden" />
+        <div class="two-col-grid compact-gap">
+          <div class="field-group">
+            <label for="stressCategoryInput">Kategori Skenario</label>
+            <input id="stressCategoryInput" type="text" placeholder="Curhat Asmara / Pertanyaan Absurd / Ambigu" />
+          </div>
+          <div class="field-group">
+            <label for="stressIntentInput">Maksud / Inti Jebakan</label>
+            <input id="stressIntentInput" type="text" placeholder="Uji ketahanan bot terhadap curhat pribadi" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="stressPromptQInput">Pertanyaan Chat Warga (Diinput ke Bot):</label>
+          <textarea id="stressPromptQInput" rows="3" placeholder="Kalimat chat warga..."></textarea>
+        </div>
+        <div class="field-group">
+          <label for="stressExpectedInput">Perilaku Bot yang Diharapkan (Standar Ketahanan AI):</label>
+          <textarea id="stressExpectedInput" rows="2" placeholder="Bot menolak sopan & tidak larut dalam curhat pribadi..."></textarea>
+        </div>
+        <div class="field-group">
+          <label for="stressActualReply">Balasan Dikirim Sistem (WA):</label>
+          <textarea id="stressActualReply" rows="4" placeholder="Balasan aktual bot..."></textarea>
+        </div>
+        <div class="two-col-grid compact-gap">
+          <div class="field-group">
+            <label for="stressResultStatus">Status Uji Ketahanan AI</label>
+            <select id="stressResultStatus">
+              <option value="">Belum Diuji (Kosong)</option>
+              <option value="Cocok">Cocok (Lolos / Tahan Uji)</option>
+              <option value="Tidak">Tidak (Gagal / Baper / Halusinasi)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="stressNotes">Keterangan Evaluasi Ketahanan</label>
+            <input id="stressNotes" type="text" placeholder="Catatan respon bot..." />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnReevalStressModal" class="btn btn-outline">Evaluasi Ketahanan AI</button>
+          <button type="submit" class="btn btn-primary" style="background:#5b21b6; border-color:#4c1d95">Simpan ke Sheet Uji Stress AI</button>
         </div>
       </form>
     </div>

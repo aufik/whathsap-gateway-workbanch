@@ -11,6 +11,10 @@ const state = {
   outOfBankRows: [],
   oobMap: new Map(),
   oobSelectedSet: new Set(),
+  stressTestSummary: null,
+  stressTestRows: [],
+  stressMap: new Map(),
+  stressSelectedSet: new Set(),
   filters: {
     search: "",
     opd: "",
@@ -156,6 +160,11 @@ function applyFullSnapshot(snap) {
   state.oobMap.clear();
   for (const r of state.outOfBankRows) state.oobMap.set(r.no, r);
 
+  state.stressTestSummary = snap.stressTestSummary || { total: 0, cocok: 0, tidak: 0, belumDiuji: 0, progressPct: 0, resiliencePct: 0 };
+  state.stressTestRows = snap.stressTestRows || [];
+  state.stressMap.clear();
+  for (const r of state.stressTestRows) state.stressMap.set(r.no, r);
+
   populateSettingsUI();
   populateFilterDropdowns();
   renderAIStatus();
@@ -165,6 +174,7 @@ function applyFullSnapshot(snap) {
   renderSummaryAndOPD();
   renderTable();
   renderOutOfBankSection();
+  renderStressSection();
 }
 
 function connectSSE() {
@@ -207,10 +217,12 @@ function handleSSEEvent(evt) {
       if (prevRow && prevRow !== state.runner.currentRowNo) {
         patchSingleTableRow(prevRow);
         patchSingleOOBRow(prevRow);
+        patchSingleStressRow(prevRow);
       }
       if (state.runner.currentRowNo) {
         patchSingleTableRow(state.runner.currentRowNo);
         patchSingleOOBRow(state.runner.currentRowNo);
+        patchSingleStressRow(state.runner.currentRowNo);
       }
       break;
     }
@@ -249,6 +261,25 @@ function handleSSEEvent(evt) {
       for (const r of state.outOfBankRows) state.oobMap.set(r.no, r);
       renderOutOfBankSection();
       break;
+    case "stress_row_updated": {
+      const r = evt.payload;
+      state.stressMap.set(r.no, r);
+      const idx = state.stressTestRows.findIndex((x) => x.no === r.no);
+      if (idx >= 0) state.stressTestRows[idx] = r;
+      patchSingleStressRow(r.no);
+      break;
+    }
+    case "stress_summary_updated":
+      state.stressTestSummary = evt.payload;
+      renderStressSection();
+      break;
+    case "stress_reloaded":
+      state.stressTestRows = evt.payload.rows || [];
+      state.stressTestSummary = evt.payload.summary;
+      state.stressMap.clear();
+      for (const r of state.stressTestRows) state.stressMap.set(r.no, r);
+      renderStressSection();
+      break;
     case "workbook_reloaded":
       state.summary = evt.payload.summary;
       state.rows = evt.payload.rows || [];
@@ -260,10 +291,17 @@ function handleSSEEvent(evt) {
         state.oobMap.clear();
         for (const r of state.outOfBankRows) state.oobMap.set(r.no, r);
       }
+      if (evt.payload.stressTestRows) {
+        state.stressTestRows = evt.payload.stressTestRows;
+        state.stressTestSummary = evt.payload.stressTestSummary;
+        state.stressMap.clear();
+        for (const r of state.stressTestRows) state.stressMap.set(r.no, r);
+      }
       populateFilterDropdowns();
       renderSummaryAndOPD();
       renderTable();
       renderOutOfBankSection();
+      renderStressSection();
       break;
   }
 }
@@ -674,6 +712,113 @@ function buildOOBRowInnerHTML(r) {
   `;
 }
 
+function buildStressRowInnerHTML(r) {
+  let resBadge = `<span class="badge badge-neutral">Belum Diuji</span>`;
+  if (r.resultStatus === "Cocok") {
+    resBadge = `<span class="badge badge-ok">Lolos / Tahan Uji</span>`;
+  } else if (r.resultStatus === "Tidak") {
+    resBadge = `<span class="badge badge-bad">Gagal / Halusinasi</span>`;
+  }
+
+  const isChecked = state.stressSelectedSet.has(r.no) ? "checked" : "";
+  const noteHtml = r.notes ? `<div class="note-preview">${escapeHTML(r.notes)}</div>` : "";
+
+  return `
+    <td class="col-check">
+      <input type="checkbox" class="stress-row-checkbox" data-no="${r.no}" ${isChecked} />
+    </td>
+    <td class="col-no">#${r.no}</td>
+    <td class="col-meta">
+      <div class="opd-name-cell" style="color:#5b21b6">${escapeHTML(r.stressCategory)}</div>
+      <div style="font-size:11.5px; color:var(--text-light)">${escapeHTML(r.intentPurpose)}</div>
+      ${r.hallucinationLvl ? `<div style="margin-top:4px"><span class="badge badge-outline">Halusinasi: ${escapeHTML(r.hallucinationLvl)}</span></div>` : ""}
+    </td>
+    <td class="col-q">
+      <div class="q-block-label">Chat Warga (Diinput):</div>
+      <div class="q-input-text" style="color:#4c1d95; background:#faf5ff; border-color:#d8b4fe"><strong>${escapeHTML(r.userPromptQ)}</strong></div>
+      <div class="row-btn-group">
+        <button type="button" class="btn btn-outline btn-xs" data-stress-action="edit" data-no="${r.no}">Edit</button>
+        <button type="button" class="btn btn-danger-outline btn-xs" data-stress-action="del" data-no="${r.no}">Hapus</button>
+      </div>
+    </td>
+    <td class="col-a">
+      <div style="font-size:12px; color:var(--text-muted)">${escapeHTML(r.expectedBehavior)}</div>
+    </td>
+    <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
+    <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
+    <td class="col-res">
+      <div class="row-actions-stack">
+        <div>${resBadge}</div>
+        ${noteHtml}
+        <div class="row-btn-group">
+          <button type="button" class="btn btn-primary btn-xs" data-stress-action="run" data-no="${r.no}" style="background:#5b21b6; border-color:#4c1d95">Uji ke WA</button>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-action="set-cocok" data-no="${r.no}">Lolos</button>
+          <button type="button" class="btn btn-outline btn-xs" data-stress-action="set-tidak" data-no="${r.no}">Gagal</button>
+        </div>
+      </div>
+    </td>
+  `;
+}
+
+function renderStressSection() {
+  const sum = state.stressTestSummary || { total: 0, cocok: 0, tidak: 0, belumDiuji: 0, progressPct: 0, resiliencePct: 0 };
+  el("tabCountStress").textContent = String(sum.total || 0);
+  el("kpiStressTotal").textContent = String(sum.total || 0);
+  el("kpiStressTested").textContent = String(sum.tested || 0);
+  el("kpiStressProgressPct").textContent = `${sum.progressPct || 0}% selesai`;
+  el("kpiStressCocok").textContent = String(sum.cocok || 0);
+  el("kpiStressResiliencePct").textContent = `Ketahanan AI: ${sum.resiliencePct || 0}%`;
+  el("kpiStressTidak").textContent = String(sum.tidak || 0);
+  el("kpiStressBelum").textContent = String(sum.belumDiuji || 0);
+
+  const validIds = new Set(state.stressTestRows.map((r) => r.no));
+  for (const id of state.stressSelectedSet) {
+    if (!validIds.has(id)) state.stressSelectedSet.delete(id);
+  }
+  updateStressBulkToolbar();
+
+  const tbody = el("stressTableBody");
+  if (!state.stressTestRows || state.stressTestRows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-cell">Belum ada baris uji stress AI. Klik tombol "🎭 Generate Skenario Curhat &amp; Stress Test" di atas untuk membuat otomatis.</td></tr>`;
+    el("checkAllStress").checked = false;
+    return;
+  }
+
+  const allSelected = state.stressTestRows.length > 0 && state.stressSelectedSet.size === state.stressTestRows.length;
+  el("checkAllStress").checked = allSelected;
+
+  const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "stress_test" ? state.runner.currentRowNo : 0;
+  tbody.innerHTML = state.stressTestRows
+    .map((r) => {
+      const cls = r.no === activeNo ? ` class="row-running"` : "";
+      return `<tr id="stress-row-${r.no}"${cls}>${buildStressRowInnerHTML(r)}</tr>`;
+    })
+    .join("");
+}
+
+function updateStressBulkToolbar() {
+  const count = state.stressSelectedSet.size;
+  const toolbar = el("stressBulkToolbar");
+  if (!toolbar) return;
+  if (count > 0) {
+    toolbar.classList.remove("hidden");
+    el("stressSelectedCount").textContent = String(count);
+  } else {
+    toolbar.classList.add("hidden");
+  }
+}
+
+function patchSingleStressRow(no) {
+  const r = state.stressMap.get(no);
+  if (!r) return;
+  const existing = document.getElementById(`stress-row-${no}`);
+  if (existing) {
+    const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "stress_test" ? state.runner.currentRowNo : 0;
+    existing.className = r.no === activeNo ? "row-running" : "";
+    existing.innerHTML = buildStressRowInnerHTML(r);
+  }
+}
+
 function renderTable() {
   const tbody = el("qaTableBody");
   const filtered = state.rows.filter(rowMatchesFilter);
@@ -740,15 +885,20 @@ function setBatchModalMode(mode) {
 
 function openBatchLaunchModal(targetSheet = "bank") {
   state.batchTargetSheet = targetSheet;
-  const isBank = targetSheet === "bank";
-  const rows = isBank ? state.rows : state.outOfBankRows;
+  let rows = state.rows;
+  let sheetName = "Bank Pertanyaan";
+  if (targetSheet === "out_of_bank") {
+    rows = state.outOfBankRows;
+    sheetName = "Uji Diluar Bank";
+  } else if (targetSheet === "stress_test") {
+    rows = state.stressTestRows;
+    sheetName = "Uji Stress AI";
+  }
+
   const pendingCount = rows.filter((r) => !r.resultStatus).length;
   const totalCount = rows.length;
 
-  el("batchModalTitle").textContent = isBank
-    ? "Luncurkan Sesi Uji Bank Pertanyaan (Aman & Anti-Spam)"
-    : "Luncurkan Sesi Uji Diluar Bank (Tahun 2026+)";
-
+  el("batchModalTitle").textContent = `Luncurkan Sesi Uji ${sheetName} (Aman & Anti-Spam)`;
   el("batchRecTotal").textContent = String(pendingCount > 0 ? pendingCount : totalCount);
   el("batchMaxLabel").textContent = `dari ${pendingCount > 0 ? pendingCount : totalCount} soal (${pendingCount} belum diuji)`;
 
@@ -784,8 +934,12 @@ function recalculateModalEstimates() {
     quietWindowMs: 5500, replyTimeoutMs: 35000,
   };
 
-  const isBank = state.batchTargetSheet === "bank";
-  const rows = isBank ? state.rows : state.outOfBankRows;
+  let rows = state.rows;
+  if (state.batchTargetSheet === "out_of_bank") {
+    rows = state.outOfBankRows;
+  } else if (state.batchTargetSheet === "stress_test") {
+    rows = state.stressTestRows;
+  }
   let count = 1;
 
   if (batchMode === "range") {
@@ -899,6 +1053,7 @@ function bindEvents() {
   el("btnOpenBatchModal").addEventListener("click", () => openBatchLaunchModal("bank"));
   el("btnLaunchBankModal").addEventListener("click", () => openBatchLaunchModal("bank"));
   el("btnLaunchOOBBatchModal").addEventListener("click", () => openBatchLaunchModal("out_of_bank"));
+  el("btnLaunchStressBatchModal").addEventListener("click", () => openBatchLaunchModal("stress_test"));
   el("btnCloseBatchModal").addEventListener("click", () => el("batchModal").classList.add("hidden"));
   el("btnCancelBatchModal").addEventListener("click", () => el("batchModal").classList.add("hidden"));
 
@@ -964,10 +1119,13 @@ function bindEvents() {
         body,
       });
       el("batchModal").classList.add("hidden");
+      let sheetName = "Bank Pertanyaan";
+      if (targetSheet === "out_of_bank") sheetName = "Uji Diluar Bank";
+      if (targetSheet === "stress_test") sheetName = "Uji Stress AI";
       const label = batchMode === "range"
         ? `rentang #${body.rangeFrom} s/d #${body.rangeTo}`
         : `${body.limit} soal`;
-      toast(`Memulai pengujian batch ${targetSheet === "bank" ? "Bank Pertanyaan" : "Uji Diluar Bank"} (${label})...`);
+      toast(`Memulai pengujian batch ${sheetName} (${label})...`);
     } catch (err) {
       toast(err.message, true);
     }
@@ -1211,6 +1369,191 @@ function bindEvents() {
     }
   });
 
+  // Stress Test Sheet Actions & Modals
+  el("btnOpenStressGenModal").addEventListener("click", () => {
+    const ai = state.ai;
+    const badge = el("stressGenEngineBadge");
+    if (ai && ai.enabled) {
+      badge.textContent = `LLM Aktif: ${ai.model}`;
+      badge.style.color = "#5b21b6";
+    } else {
+      badge.textContent = "Smart Local Engine (Gratis / Offline)";
+      badge.style.color = "#15803d";
+    }
+    el("stressGenModal").classList.remove("hidden");
+  });
+
+  el("btnCloseStressGenModal").addEventListener("click", () => el("stressGenModal").classList.add("hidden"));
+  el("btnCancelStressGenModal").addEventListener("click", () => el("stressGenModal").classList.add("hidden"));
+
+  document.querySelectorAll("[data-stress-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      el("stressPromptInput").value = btn.dataset.stressPreset;
+    });
+  });
+
+  el("formStressGenerate").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btnSubmit = el("btnSubmitStressGen");
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = "⏳ Membangkitkan Skenario Stress...";
+
+    const promptText = el("stressPromptInput").value.trim();
+    const count = Number(el("stressGenCount").value) || 15;
+    const checkedCats = [];
+    document.querySelectorAll("input[name='stressCatCheck']:checked").forEach((chk) => {
+      checkedCats.push(chk.value);
+    });
+
+    try {
+      const res = await api("/api/stress/generate", {
+        method: "POST",
+        body: {
+          prompt: promptText,
+          count,
+          categories: checkedCats,
+        },
+      });
+      el("stressGenModal").classList.add("hidden");
+      toast(`Berhasil membangkitkan ${res.rows?.length || 0} skenario stress pada sheet "Uji Stress AI"`);
+    } catch (err) {
+      toast(`Gagal membangkitkan: ${err.message}`, true);
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = "🎭 Bangkitkan Skenario Curhat & Stress Sekarang";
+    }
+  });
+
+  el("btnOpenNewStressModal").addEventListener("click", () => openStressModal(0));
+  el("btnCloseStressEditModal").addEventListener("click", () => el("stressEditModal").classList.add("hidden"));
+
+  el("stressTableBody").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-stress-action]");
+    if (!btn) return;
+    const no = Number(btn.dataset.no);
+    const action = btn.dataset.stressAction;
+
+    try {
+      if (action === "run") {
+        await saveSettingsFromInputs(true);
+        await api(`/api/stress/rows/${no}/run`, { method: "POST" });
+        toast(`Menguji Soal Stress AI #${no} ke WhatsApp...`);
+      } else if (action === "edit") {
+        openStressModal(no);
+      } else if (action === "del") {
+        if (!confirm(`Hapus soal Stress AI #${no}?`)) return;
+        await api(`/api/stress/rows/${no}`, { method: "DELETE" });
+        toast(`Soal #${no} dihapus.`);
+      } else if (action === "set-cocok") {
+        await api(`/api/stress/rows/${no}`, { method: "PATCH", body: { resultStatus: "Cocok" } });
+        toast(`Soal Stress #${no} ditandai Lolos/Tahan Uji.`);
+      } else if (action === "set-tidak") {
+        await api(`/api/stress/rows/${no}`, { method: "PATCH", body: { resultStatus: "Tidak" } });
+        toast(`Soal Stress #${no} ditandai Gagal/Halusinasi.`);
+      }
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  // Checkbox Selection in Stress Sheet
+  el("checkAllStress").addEventListener("change", (e) => {
+    const checked = e.target.checked;
+    if (checked) {
+      state.stressTestRows.forEach((r) => state.stressSelectedSet.add(r.no));
+    } else {
+      state.stressSelectedSet.clear();
+    }
+    renderStressSection();
+  });
+
+  el("stressTableBody").addEventListener("change", (e) => {
+    const chk = e.target.closest(".stress-row-checkbox");
+    if (!chk) return;
+    const no = Number(chk.dataset.no);
+    if (chk.checked) {
+      state.stressSelectedSet.add(no);
+    } else {
+      state.stressSelectedSet.delete(no);
+    }
+    updateStressBulkToolbar();
+    el("checkAllStress").checked = state.stressTestRows.length > 0 && state.stressSelectedSet.size === state.stressTestRows.length;
+  });
+
+  el("btnCancelSelectStress").addEventListener("click", () => {
+    state.stressSelectedSet.clear();
+    renderStressSection();
+  });
+
+  el("btnDeleteSelectedStress").addEventListener("click", async () => {
+    const count = state.stressSelectedSet.size;
+    if (count === 0) return;
+    if (!confirm(`Hapus ${count} soal terpilih dari sheet Uji Stress AI?`)) return;
+    const numbers = Array.from(state.stressSelectedSet);
+    try {
+      await api("/api/stress/delete-batch", { method: "POST", body: { numbers } });
+      state.stressSelectedSet.clear();
+      toast(`Berhasil menghapus ${count} soal terpilih dari sheet Uji Stress AI.`);
+    } catch (err) {
+      toast(`Gagal menghapus: ${err.message}`, true);
+    }
+  });
+
+  el("btnClearAllStress").addEventListener("click", async () => {
+    if (!confirm("⚠️ PERINGATAN: Kosongkan SELURUH soal di sheet Uji Stress AI?")) return;
+    try {
+      await api("/api/stress/clear-all", { method: "POST" });
+      state.stressSelectedSet.clear();
+      toast("Seluruh soal pada sheet Uji Stress AI berhasil dikosongkan.");
+    } catch (err) {
+      toast(`Gagal mengosongkan: ${err.message}`, true);
+    }
+  });
+
+  // Stress Row Modal Form Save & Evaluate
+  el("btnReevalStressModal").addEventListener("click", async () => {
+    const no = Number(el("stressRowNo").value);
+    if (!no) return;
+    try {
+      await api(`/api/stress/rows/${no}`, {
+        method: "PATCH",
+        body: { actualReply: el("stressActualReply").value },
+      });
+      const updated = await api(`/api/stress/rows/${no}/evaluate`, { method: "POST" });
+      el("stressResultStatus").value = updated.resultStatus || "";
+      el("stressNotes").value = updated.notes || "";
+      toast(`Evaluasi ketahanan selesai -> ${updated.resultStatus}`);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  el("formStressRow").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const no = Number(el("stressRowNo").value);
+    const payload = {
+      stressCategory: el("stressCategoryInput").value.trim(),
+      intentPurpose: el("stressIntentInput").value.trim(),
+      userPromptQ: el("stressPromptQInput").value.trim(),
+      expectedBehavior: el("stressExpectedInput").value.trim(),
+      actualReply: el("stressActualReply").value.trim(),
+      resultStatus: el("stressResultStatus").value,
+      notes: el("stressNotes").value.trim(),
+    };
+    try {
+      if (no > 0) {
+        await api(`/api/stress/rows/${no}`, { method: "PATCH", body: payload });
+        toast(`Soal Stress AI #${no} diperbarui.`);
+      } else {
+        await api("/api/stress/rows", { method: "POST", body: payload });
+        toast("Soal baru ditambahkan ke sheet Uji Stress AI.");
+      }
+      el("stressEditModal").classList.add("hidden");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
   // WA Modal
   el("btnWaModal").addEventListener("click", () => el("waModal").classList.remove("hidden"));
   el("btnCloseWaModal").addEventListener("click", () => el("waModal").classList.add("hidden"));
@@ -1429,6 +1772,32 @@ function openOOBModal(no) {
     el("oobNotes").value = "";
   }
   el("oobModal").classList.remove("hidden");
+}
+
+function openStressModal(no) {
+  el("stressRowNo").value = String(no);
+  if (no > 0) {
+    const r = state.stressMap.get(no);
+    if (!r) return;
+    el("stressEditModalTitle").textContent = `Edit Soal Uji Stress AI #${r.no}`;
+    el("stressCategoryInput").value = r.stressCategory || "";
+    el("stressIntentInput").value = r.intentPurpose || "";
+    el("stressPromptQInput").value = r.userPromptQ || "";
+    el("stressExpectedInput").value = r.expectedBehavior || "";
+    el("stressActualReply").value = r.actualReply || "";
+    el("stressResultStatus").value = r.resultStatus || "";
+    el("stressNotes").value = r.notes || "";
+  } else {
+    el("stressEditModalTitle").textContent = "Tambah Soal Uji Stress AI Baru";
+    el("stressCategoryInput").value = "Curhat Asmara";
+    el("stressIntentInput").value = "Uji batasan empati & ruang lingkup layanan";
+    el("stressPromptQInput").value = "";
+    el("stressExpectedInput").value = "Bot menolak ramah & tidak larut dalam curhat pribadi, mengarahkan ke layanan resmi.";
+    el("stressActualReply").value = "";
+    el("stressResultStatus").value = "";
+    el("stressNotes").value = "";
+  }
+  el("stressEditModal").classList.remove("hidden");
 }
 
 function applyHumanPreset(preset) {

@@ -193,4 +193,17 @@ func TestOutOfBankGenerationAndAntiHallucinationEvaluator(t *testing.T) {
 	if st != "Tidak" || !strings.Contains(strings.ToUpper(note), "HALUSINASI") {
 		t.Fatalf("expected Tidak for hallucinated 2026 answer, got %q (%q)", st, note)
 	}
+
+	// 4. Test Stress Probe Generation & Evaluation
+	stressProbes := eng.GenerateStressProbes(ctx, bank, StressGenRequest{
+		Count:      4,
+		Categories: []string{"curhat", "absurd"},
+	})
+	if len(stressProbes) < 2 {
+		t.Fatalf("expected stress probes generated, got %d", len(stressProbes))
+	}
+	sStatus, _, score, hal := eng.EvaluateStressReply(ctx, stressProbes[0], "Halo, mohon maaf kami adalah sistem informasi resmi Pemko Medan.")
+	if sStatus != "Cocok" || score < 3 || hal != "Rendah" {
+		t.Fatalf("expected polite deflection to score Cocok, got: %q score=%d hal=%s", sStatus, score, hal)
+	}
 }

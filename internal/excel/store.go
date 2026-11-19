@@ -23,25 +23,31 @@ const (
 	SheetBank      = "Bank Pertanyaan"
 	SheetRingkasan = "Ringkasan"
 	SheetOutOfBank = "Uji Diluar Bank"
+	SheetStress    = "Uji Stress AI"
 )
 
 type persistedMetricsFile struct {
-	Bank          map[int]model.RowHumanMetrics `json:"bank"`
-	OutOfBank     map[int]model.RowHumanMetrics `json:"outOfBank"`
-	BankMedia     map[int][]string              `json:"bankMedia,omitempty"`
-	OutOfBankMedia map[int][]string             `json:"outOfBankMedia,omitempty"`
+	Bank           map[int]model.RowHumanMetrics `json:"bank"`
+	OutOfBank      map[int]model.RowHumanMetrics `json:"outOfBank"`
+	Stress         map[int]model.RowHumanMetrics `json:"stress,omitempty"`
+	BankMedia      map[int][]string              `json:"bankMedia,omitempty"`
+	OutOfBankMedia map[int][]string              `json:"outOfBankMedia,omitempty"`
+	StressMedia    map[int][]string              `json:"stressMedia,omitempty"`
 }
 
 type Store struct {
-	mu          sync.RWMutex
-	filePath    string
-	rows        []model.TestRow
-	oobRows     []model.OutOfBankRow
-	opdOrder    []string
-	bankMetrics map[int]model.RowHumanMetrics
-	oobMetrics  map[int]model.RowHumanMetrics
-	bankMedia   map[int][]string
-	oobMedia    map[int][]string
+	mu            sync.RWMutex
+	filePath      string
+	rows          []model.TestRow
+	oobRows       []model.OutOfBankRow
+	stressRows    []model.StressTestRow
+	opdOrder      []string
+	bankMetrics   map[int]model.RowHumanMetrics
+	oobMetrics    map[int]model.RowHumanMetrics
+	stressMetrics map[int]model.RowHumanMetrics
+	bankMedia     map[int][]string
+	oobMedia      map[int][]string
+	stressMedia   map[int][]string
 }
 
 func NewStore(filePath string) (*Store, error) {
@@ -49,11 +55,13 @@ func NewStore(filePath string) (*Store, error) {
 		return nil, fmt.Errorf("create safety backup: %w", err)
 	}
 	s := &Store{
-		filePath:    filePath,
-		bankMetrics: map[int]model.RowHumanMetrics{},
-		oobMetrics:  map[int]model.RowHumanMetrics{},
-		bankMedia:   map[int][]string{},
-		oobMedia:    map[int][]string{},
+		filePath:      filePath,
+		bankMetrics:   map[int]model.RowHumanMetrics{},
+		oobMetrics:    map[int]model.RowHumanMetrics{},
+		stressMetrics: map[int]model.RowHumanMetrics{},
+		bankMedia:     map[int][]string{},
+		oobMedia:      map[int][]string{},
+		stressMedia:   map[int][]string{},
 	}
 	s.loadMetricsSidecarLocked()
 	if err := s.reloadLocked(); err != nil {
@@ -143,8 +151,10 @@ func ensureBackup(filePath string) error {
 func (s *Store) loadMetricsSidecarLocked() {
 	s.bankMetrics = map[int]model.RowHumanMetrics{}
 	s.oobMetrics = map[int]model.RowHumanMetrics{}
+	s.stressMetrics = map[int]model.RowHumanMetrics{}
 	s.bankMedia = map[int][]string{}
 	s.oobMedia = map[int][]string{}
+	s.stressMedia = map[int][]string{}
 
 	raw, err := os.ReadFile(MetricsPathFor(s.filePath))
 	if err != nil {
@@ -160,11 +170,17 @@ func (s *Store) loadMetricsSidecarLocked() {
 	if pm.OutOfBank != nil {
 		s.oobMetrics = pm.OutOfBank
 	}
+	if pm.Stress != nil {
+		s.stressMetrics = pm.Stress
+	}
 	if pm.BankMedia != nil {
 		s.bankMedia = pm.BankMedia
 	}
 	if pm.OutOfBankMedia != nil {
 		s.oobMedia = pm.OutOfBankMedia
+	}
+	if pm.StressMedia != nil {
+		s.stressMedia = pm.StressMedia
 	}
 }
 
@@ -172,8 +188,10 @@ func (s *Store) saveMetricsSidecarLocked() {
 	pm := persistedMetricsFile{
 		Bank:           s.bankMetrics,
 		OutOfBank:      s.oobMetrics,
+		Stress:         s.stressMetrics,
 		BankMedia:      s.bankMedia,
 		OutOfBankMedia: s.oobMedia,
+		StressMedia:    s.stressMedia,
 	}
 	raw, err := json.MarshalIndent(pm, "", "  ")
 	if err != nil {
@@ -328,8 +346,61 @@ func (s *Store) parseWorkbookLocked(f *excelize.File) error {
 		}
 	}
 
+	// Parse separate SheetStress if present in workbook
+	var parsedStress []model.StressTestRow
+	if stressIdx, err := f.GetSheetIndex(SheetStress); err == nil && stressIdx >= 0 {
+		if stressRaw, err := f.GetRows(SheetStress); err == nil {
+			for i := 2; i < len(stressRaw); i++ {
+				cols := stressRaw[i]
+				getCol := func(c int) string {
+					if c < len(cols) {
+						return strings.TrimSpace(cols[c])
+					}
+					return ""
+				}
+				promptQ := getCol(2)
+				if getCol(0) == "" && promptQ == "" {
+					continue
+				}
+				no := len(parsedStress) + 1
+				if n, err := strconv.Atoi(getCol(0)); err == nil && n > 0 {
+					no = n
+				}
+				score := 0
+				if s, err := strconv.Atoi(getCol(9)); err == nil {
+					score = s
+				}
+				item := model.StressTestRow{
+					No:               no,
+					ExcelRow:         i + 1,
+					StressCategory:   getCol(1),
+					UserPromptQ:      promptQ,
+					IntentPurpose:    getCol(3),
+					ExpectedBehavior: getCol(4),
+					ActualReply:      getCol(5),
+					HumanSummary:     getCol(6),
+					Notes:            getCol(7),
+					ResultStatus:     normalizeResultStatus(getCol(8)),
+					PolitenessScore:  score,
+					HallucinationLvl: getCol(10),
+				}
+				if m, ok := s.stressMetrics[no]; ok {
+					item.Metrics = m
+					if item.HumanSummary == "" {
+						item.HumanSummary = FormatHumanMetricsSummary(m)
+					}
+				}
+				if media, ok := s.stressMedia[no]; ok {
+					item.MediaFiles = media
+				}
+				parsedStress = append(parsedStress, item)
+			}
+		}
+	}
+
 	s.rows = parsed
 	s.oobRows = parsedOOB
+	s.stressRows = parsedStress
 	s.opdOrder = opds
 	return nil
 }
@@ -376,6 +447,15 @@ func (s *Store) OutOfBankSnapshot() ([]model.OutOfBankRow, model.OutOfBankSummar
 	return out, s.computeOutOfBankSummaryLocked()
 }
 
+func (s *Store) StressTestSnapshot() ([]model.StressTestRow, model.StressTestSummary) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]model.StressTestRow, len(s.stressRows))
+	copy(out, s.stressRows)
+	return out, s.computeStressSummaryLocked()
+}
+
 func (s *Store) GetRow(no int) (model.TestRow, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -396,6 +476,17 @@ func (s *Store) GetOutOfBankRow(no int) (model.OutOfBankRow, bool) {
 		}
 	}
 	return model.OutOfBankRow{}, false
+}
+
+func (s *Store) GetStressTestRow(no int) (model.StressTestRow, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, r := range s.stressRows {
+		if r.No == no {
+			return r, true
+		}
+	}
+	return model.StressTestRow{}, false
 }
 
 func (s *Store) PendingRowNumbers(forceAll bool, limit int) []int {
@@ -459,6 +550,41 @@ func (s *Store) PendingOutOfBankRange(fromNo, toNo int, forceAll bool) []int {
 	}
 	var nums []int
 	for _, r := range s.oobRows {
+		if r.No >= fromNo && r.No <= toNo {
+			if forceAll || r.ResultStatus == "" {
+				nums = append(nums, r.No)
+			}
+		}
+	}
+	return nums
+}
+
+func (s *Store) PendingStressNumbers(forceAll bool, limit int) []int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var nums []int
+	for _, r := range s.stressRows {
+		if forceAll || r.ResultStatus == "" {
+			nums = append(nums, r.No)
+			if limit > 0 && len(nums) >= limit {
+				break
+			}
+		}
+	}
+	return nums
+}
+
+func (s *Store) PendingStressRange(fromNo, toNo int, forceAll bool) []int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if fromNo <= 0 {
+		fromNo = 1
+	}
+	if toNo < fromNo {
+		toNo = fromNo
+	}
+	var nums []int
+	for _, r := range s.stressRows {
 		if r.No >= fromNo && r.No <= toNo {
 			if forceAll || r.ResultStatus == "" {
 				nums = append(nums, r.No)
@@ -751,6 +877,228 @@ func (s *Store) ClearOutOfBank() ([]model.OutOfBankRow, model.OutOfBankSummary, 
 	return []model.OutOfBankRow{}, s.computeOutOfBankSummaryLocked(), nil
 }
 
+func (s *Store) AppendStressTestRows(items []model.StressTestRow) ([]model.StressTestRow, model.StressTestSummary, error) {
+	if len(items) == 0 {
+		return nil, model.StressTestSummary{}, errors.New("tidak ada baris stress test untuk ditambahkan")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existingQuestions := map[string]bool{}
+	for _, r := range s.stressRows {
+		existingQuestions[strings.ToLower(strings.TrimSpace(r.UserPromptQ))] = true
+	}
+
+	added := 0
+	for _, it := range items {
+		pq := strings.TrimSpace(it.UserPromptQ)
+		if pq == "" {
+			continue
+		}
+		key := strings.ToLower(pq)
+		if existingQuestions[key] {
+			continue
+		}
+		existingQuestions[key] = true
+
+		nextNo := len(s.stressRows) + 1
+		it.No = nextNo
+		it.ExcelRow = nextNo + 2
+		it.UserPromptQ = pq
+		it.StressCategory = strings.TrimSpace(it.StressCategory)
+		it.IntentPurpose = strings.TrimSpace(it.IntentPurpose)
+		it.ExpectedBehavior = strings.TrimSpace(it.ExpectedBehavior)
+		it.ResultStatus = normalizeResultStatus(it.ResultStatus)
+		it.HumanSummary = FormatHumanMetricsSummary(it.Metrics)
+		s.stressRows = append(s.stressRows, it)
+		added++
+	}
+
+	if added == 0 {
+		out := make([]model.StressTestRow, len(s.stressRows))
+		copy(out, s.stressRows)
+		return out, s.computeStressSummaryLocked(), nil
+	}
+
+	if err := s.writeStressSheetAtomicLocked(); err != nil {
+		return nil, model.StressTestSummary{}, err
+	}
+
+	out := make([]model.StressTestRow, len(s.stressRows))
+	copy(out, s.stressRows)
+	return out, s.computeStressSummaryLocked(), nil
+}
+
+func (s *Store) UpdateStressTestRow(no int, patch model.StressTestPatch) (model.StressTestRow, model.StressTestSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	targetIdx := -1
+	for i := range s.stressRows {
+		if s.stressRows[i].No == no {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return model.StressTestRow{}, model.StressTestSummary{}, fmt.Errorf("baris Uji Stress AI #%d tidak ditemukan", no)
+	}
+
+	updated := s.stressRows[targetIdx]
+	if patch.StressCategory != nil {
+		updated.StressCategory = strings.TrimSpace(*patch.StressCategory)
+	}
+	if patch.UserPromptQ != nil {
+		updated.UserPromptQ = strings.TrimSpace(*patch.UserPromptQ)
+	}
+	if patch.IntentPurpose != nil {
+		updated.IntentPurpose = strings.TrimSpace(*patch.IntentPurpose)
+	}
+	if patch.ExpectedBehavior != nil {
+		updated.ExpectedBehavior = strings.TrimSpace(*patch.ExpectedBehavior)
+	}
+	if patch.ActualReply != nil {
+		updated.ActualReply = strings.TrimSpace(*patch.ActualReply)
+	}
+	if patch.Notes != nil {
+		updated.Notes = strings.TrimSpace(*patch.Notes)
+	}
+	if patch.ResultStatus != nil {
+		updated.ResultStatus = normalizeResultStatus(*patch.ResultStatus)
+	}
+	if patch.PolitenessScore != nil {
+		updated.PolitenessScore = *patch.PolitenessScore
+	}
+	if patch.HallucinationLvl != nil {
+		updated.HallucinationLvl = strings.TrimSpace(*patch.HallucinationLvl)
+	}
+	if patch.MediaFiles != nil {
+		updated.MediaFiles = *patch.MediaFiles
+		if s.stressMedia == nil {
+			s.stressMedia = map[int][]string{}
+		}
+		s.stressMedia[no] = updated.MediaFiles
+		s.saveMetricsSidecarLocked()
+	}
+	if patch.Metrics != nil {
+		updated.Metrics = *patch.Metrics
+		updated.HumanSummary = FormatHumanMetricsSummary(updated.Metrics)
+		if s.stressMetrics == nil {
+			s.stressMetrics = map[int]model.RowHumanMetrics{}
+		}
+		s.stressMetrics[no] = updated.Metrics
+		s.saveMetricsSidecarLocked()
+	}
+
+	s.stressRows[targetIdx] = updated
+	if err := s.writeStressSheetAtomicLocked(); err != nil {
+		return model.StressTestRow{}, model.StressTestSummary{}, err
+	}
+	return updated, s.computeStressSummaryLocked(), nil
+}
+
+func (s *Store) DeleteStressTestRow(no int) ([]model.StressTestRow, model.StressTestSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	next := make([]model.StressTestRow, 0, len(s.stressRows))
+	newMetrics := map[int]model.RowHumanMetrics{}
+	found := false
+
+	for _, r := range s.stressRows {
+		if r.No == no {
+			found = true
+			continue
+		}
+		newNo := len(next) + 1
+		r.No = newNo
+		r.ExcelRow = newNo + 2
+		if r.Metrics.TestedAt > 0 || r.Metrics.TypingMs > 0 {
+			newMetrics[newNo] = r.Metrics
+		}
+		next = append(next, r)
+	}
+	if !found {
+		return nil, model.StressTestSummary{}, fmt.Errorf("baris Uji Stress AI #%d tidak ditemukan", no)
+	}
+
+	s.stressRows = next
+	s.stressMetrics = newMetrics
+	s.saveMetricsSidecarLocked()
+
+	if err := s.writeStressSheetAtomicLocked(); err != nil {
+		return nil, model.StressTestSummary{}, err
+	}
+
+	out := make([]model.StressTestRow, len(s.stressRows))
+	copy(out, s.stressRows)
+	return out, s.computeStressSummaryLocked(), nil
+}
+
+func (s *Store) DeleteStressTestBatch(numbers []int) ([]model.StressTestRow, model.StressTestSummary, error) {
+	if len(numbers) == 0 {
+		rows, sum := s.StressTestSnapshot()
+		return rows, sum, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	toDelete := make(map[int]bool, len(numbers))
+	for _, n := range numbers {
+		toDelete[n] = true
+	}
+
+	next := make([]model.StressTestRow, 0, len(s.stressRows))
+	newMetrics := map[int]model.RowHumanMetrics{}
+	newMedia := map[int][]string{}
+
+	for _, r := range s.stressRows {
+		if toDelete[r.No] {
+			continue
+		}
+		newNo := len(next) + 1
+		r.No = newNo
+		r.ExcelRow = newNo + 2
+		if r.Metrics.TestedAt > 0 || r.Metrics.TypingMs > 0 {
+			newMetrics[newNo] = r.Metrics
+		}
+		if len(r.MediaFiles) > 0 {
+			newMedia[newNo] = r.MediaFiles
+		}
+		next = append(next, r)
+	}
+
+	s.stressRows = next
+	s.stressMetrics = newMetrics
+	s.stressMedia = newMedia
+	s.saveMetricsSidecarLocked()
+
+	if err := s.writeStressSheetAtomicLocked(); err != nil {
+		return nil, model.StressTestSummary{}, err
+	}
+
+	out := make([]model.StressTestRow, len(s.stressRows))
+	copy(out, s.stressRows)
+	return out, s.computeStressSummaryLocked(), nil
+}
+
+func (s *Store) ClearStressTest() ([]model.StressTestRow, model.StressTestSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stressRows = []model.StressTestRow{}
+	s.stressMetrics = map[int]model.RowHumanMetrics{}
+	s.stressMedia = map[int][]string{}
+	s.saveMetricsSidecarLocked()
+
+	if err := s.writeStressSheetAtomicLocked(); err != nil {
+		return nil, model.StressTestSummary{}, err
+	}
+
+	return []model.StressTestRow{}, s.computeStressSummaryLocked(), nil
+}
+
 func (s *Store) writeRowAtomicLocked(row model.TestRow) error {
 	f, err := excelize.OpenFile(s.filePath)
 	if err != nil {
@@ -889,6 +1237,103 @@ func (s *Store) writeOutOfBankSheetAtomicLocked() error {
 	return writeWorkbookAtomically(f, s.filePath)
 }
 
+func (s *Store) writeStressSheetAtomicLocked() error {
+	f, err := excelize.OpenFile(s.filePath)
+	if err != nil {
+		return fmt.Errorf("open workbook for Uji Stress AI: %w", err)
+	}
+	defer f.Close()
+
+	activeIdx := f.GetActiveSheetIndex()
+
+	if idx, err := f.GetSheetIndex(SheetStress); err == nil && idx >= 0 {
+		_ = f.DeleteSheet(SheetStress)
+	}
+	if _, err := f.NewSheet(SheetStress); err != nil {
+		return fmt.Errorf("create sheet %s: %w", SheetStress, err)
+	}
+
+	titleStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12, Color: "#FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#4C1D95"}, Pattern: 1},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Color: []string{"#5B21B6"}, Pattern: 1},
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
+	})
+	bodyStyle, _ := f.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{Vertical: "top", WrapText: true},
+	})
+
+	_ = f.SetCellStr(SheetStress, "A1", "UJI STRESS AI CHATBOT — SKENARIO CURHAT, ABSURD, AMBIGU, EMOSI, & TANPA JAWABAN")
+	_ = f.SetCellStyle(SheetStress, "A1", "A1", titleStyle)
+
+	headers := []string{
+		"No",
+		"Kategori Stress Test",
+		"Pertanyaan Chat Warga (Diinput ke Bot)",
+		"Maksud / Inti Jebakan Penguji",
+		"Perilaku Bot yang Diharapkan (Standar Ketahanan AI)",
+		"Balasan Dikirim Sistem (WA)",
+		"Detail Ritme Manusia (Anti-Spam)",
+		"Keterangan Evaluasi Ketahanan AI",
+		"Status Uji (Cocok/Tidak)",
+		"Skor Kesantunan & Logika (1-5)",
+		"Tingkat Halusinasi",
+	}
+	for cIdx, h := range headers {
+		colName, _ := excelize.ColumnNumberToName(cIdx + 1)
+		cell := fmt.Sprintf("%s2", colName)
+		_ = f.SetCellStr(SheetStress, cell, h)
+		_ = f.SetCellStyle(SheetStress, cell, cell, headerStyle)
+	}
+
+	widths := map[string]float64{
+		"A": 6, "B": 24, "C": 40, "D": 32, "E": 38, "F": 42,
+		"G": 34, "H": 32, "I": 16, "J": 14, "K": 16,
+	}
+	for col, w := range widths {
+		_ = f.SetColWidth(SheetStress, col, col, w)
+	}
+
+	for i, r := range s.stressRows {
+		rowNum := i + 3
+		vals := []any{
+			r.No,
+			r.StressCategory,
+			r.UserPromptQ,
+			r.IntentPurpose,
+			r.ExpectedBehavior,
+			r.ActualReply,
+			r.HumanSummary,
+			r.Notes,
+			r.ResultStatus,
+			r.PolitenessScore,
+			r.HallucinationLvl,
+		}
+		for cIdx, v := range vals {
+			colName, _ := excelize.ColumnNumberToName(cIdx + 1)
+			cell := fmt.Sprintf("%s%d", colName, rowNum)
+			_ = f.SetCellValue(SheetStress, cell, v)
+		}
+		_ = f.SetCellStyle(SheetStress, fmt.Sprintf("A%d", rowNum), fmt.Sprintf("K%d", rowNum), bodyStyle)
+
+		if len(r.MediaFiles) > 0 {
+			_ = f.SetRowHeight(SheetStress, rowNum, 165)
+		}
+
+		// Embed pictures into cell F of Stress sheet if present
+		embedRowPictures(f, SheetStress, fmt.Sprintf("F%d", rowNum), r.MediaFiles)
+	}
+
+	if activeIdx >= 0 {
+		f.SetActiveSheet(activeIdx)
+	}
+
+	return writeWorkbookAtomically(f, s.filePath)
+}
+
 func embedRowPictures(f *excelize.File, sheet, cell string, mediaPaths []string) {
 	if len(mediaPaths) == 0 {
 		return
@@ -979,9 +1424,13 @@ func (s *Store) ReplaceWorkbook(uploaded []byte, targetFileName string) (model.O
 	destPath := filepath.Join(dir, cleanName)
 
 	probe := &Store{
-		filePath:    destPath,
-		bankMetrics: map[int]model.RowHumanMetrics{},
-		oobMetrics:  map[int]model.RowHumanMetrics{},
+		filePath:      destPath,
+		bankMetrics:   map[int]model.RowHumanMetrics{},
+		oobMetrics:    map[int]model.RowHumanMetrics{},
+		stressMetrics: map[int]model.RowHumanMetrics{},
+		bankMedia:     map[int][]string{},
+		oobMedia:      map[int][]string{},
+		stressMedia:   map[int][]string{},
 	}
 	probe.loadMetricsSidecarLocked()
 	if err := probe.parseWorkbookLocked(f); err != nil {
@@ -1001,9 +1450,14 @@ func (s *Store) ReplaceWorkbook(uploaded []byte, targetFileName string) (model.O
 	s.filePath = destPath
 	s.rows = probe.rows
 	s.oobRows = probe.oobRows
+	s.stressRows = probe.stressRows
 	s.opdOrder = probe.opdOrder
 	s.bankMetrics = probe.bankMetrics
 	s.oobMetrics = probe.oobMetrics
+	s.stressMetrics = probe.stressMetrics
+	s.bankMedia = probe.bankMedia
+	s.oobMedia = probe.oobMedia
+	s.stressMedia = probe.stressMedia
 	return s.computeSummaryLocked(), nil
 }
 
@@ -1102,6 +1556,31 @@ func (s *Store) computeOutOfBankSummaryLocked() model.OutOfBankSummary {
 	}
 	if sum.Tested > 0 {
 		sum.SafetyPct = round1(float64(sum.Cocok) * 100 / float64(sum.Tested))
+	}
+	return sum
+}
+
+func (s *Store) computeStressSummaryLocked() model.StressTestSummary {
+	sum := model.StressTestSummary{
+		Total: len(s.stressRows),
+	}
+	for _, r := range s.stressRows {
+		switch r.ResultStatus {
+		case "Cocok":
+			sum.Cocok++
+			sum.Tested++
+		case "Tidak":
+			sum.Tidak++
+			sum.Tested++
+		default:
+			sum.BelumDiuji++
+		}
+	}
+	if sum.Total > 0 {
+		sum.ProgressPct = round1(float64(sum.Tested) * 100 / float64(sum.Total))
+	}
+	if sum.Tested > 0 {
+		sum.ResiliencePct = round1(float64(sum.Cocok) * 100 / float64(sum.Tested))
 	}
 	return sum
 }
