@@ -10,6 +10,7 @@ const state = {
   outOfBankSummary: null,
   outOfBankRows: [],
   oobMap: new Map(),
+  oobSelectedSet: new Set(),
   filters: {
     search: "",
     opd: "",
@@ -188,6 +189,10 @@ function handleSSEEvent(evt) {
     case "wa_status":
       state.wa = evt.payload;
       renderWAStatus();
+      break;
+    case "ai_status_updated":
+      state.ai = evt.payload;
+      renderAIStatus();
       break;
     case "settings_updated":
       state.settings = evt.payload;
@@ -488,11 +493,22 @@ function renderOutOfBankSection() {
   el("kpiOOBTidak").textContent = String(sum.tidak || 0);
   el("kpiOOBBelum").textContent = String(sum.belumDiuji || 0);
 
+  // Clean invalid selected IDs
+  const validIds = new Set(state.outOfBankRows.map((r) => r.no));
+  for (const id of state.oobSelectedSet) {
+    if (!validIds.has(id)) state.oobSelectedSet.delete(id);
+  }
+  updateOOBBulkToolbar();
+
   const tbody = el("oobTableBody");
   if (!state.outOfBankRows || state.outOfBankRows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">Belum ada baris uji diluar bank. Klik tombol "+ Generate Variasi Tahun 2026 dari Bank" di atas untuk membuat otomatis.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-cell">Belum ada baris uji diluar bank. Klik tombol "+ Generate Variasi Tahun 2026 dari Bank" di atas untuk membuat otomatis.</td></tr>`;
+    el("checkAllOOB").checked = false;
     return;
   }
+
+  const allSelected = state.outOfBankRows.length > 0 && state.oobSelectedSet.size === state.outOfBankRows.length;
+  el("checkAllOOB").checked = allSelected;
 
   const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "out_of_bank" ? state.runner.currentRowNo : 0;
   tbody.innerHTML = state.outOfBankRows
@@ -501,6 +517,18 @@ function renderOutOfBankSection() {
       return `<tr id="oob-row-${r.no}"${cls}>${buildOOBRowInnerHTML(r)}</tr>`;
     })
     .join("");
+}
+
+function updateOOBBulkToolbar() {
+  const count = state.oobSelectedSet.size;
+  const toolbar = el("oobBulkToolbar");
+  if (!toolbar) return;
+  if (count > 0) {
+    toolbar.classList.remove("hidden");
+    el("oobSelectedCount").textContent = String(count);
+  } else {
+    toolbar.classList.add("hidden");
+  }
 }
 
 function populateFilterDropdowns() {
@@ -604,9 +632,13 @@ function buildOOBRowInnerHTML(r) {
     resBadge = `<span class="badge badge-bad">Halusinasi / Salah</span>`;
   }
 
+  const isChecked = state.oobSelectedSet.has(r.no) ? "checked" : "";
   const noteHtml = r.notes ? `<div class="note-preview">${escapeHTML(r.notes)}</div>` : "";
 
   return `
+    <td class="col-check">
+      <input type="checkbox" class="oob-row-checkbox" data-no="${r.no}" ${isChecked} />
+    </td>
     <td class="col-no">#${r.no}</td>
     <td class="col-meta">
       <div class="opd-name-cell">${escapeHTML(r.sourceRef)}</div>
@@ -694,6 +726,18 @@ function patchSingleOOBRow(no) {
 }
 
 /* Modal Launch Batch & Real-Time Time Estimator */
+let batchMode = "count"; // "count" | "range"
+
+function setBatchModalMode(mode) {
+  batchMode = mode;
+  const isCount = mode === "count";
+  el("radioModeCount").checked = isCount;
+  el("radioModeRange").checked = !isCount;
+  el("cardBatchCount").classList.toggle("active", isCount);
+  el("cardBatchRange").classList.toggle("active", !isCount);
+  recalculateModalEstimates();
+}
+
 function openBatchLaunchModal(targetSheet = "bank") {
   state.batchTargetSheet = targetSheet;
   const isBank = targetSheet === "bank";
@@ -712,8 +756,15 @@ function openBatchLaunchModal(targetSheet = "bank") {
   input.max = String(totalCount || 1);
   const defVal = pendingCount > 0 ? Math.min(30, pendingCount) : Math.min(30, totalCount);
   input.value = String(defVal || 1);
+
+  el("inputRangeFrom").max = String(totalCount || 1);
+  el("inputRangeTo").max = String(totalCount || 1);
+  el("inputRangeFrom").value = "1";
+  el("inputRangeTo").value = String(Math.min(30, totalCount || 1));
+
   el("checkForceAllBatch").checked = pendingCount === 0;
 
+  setBatchModalMode("count");
   recalculateModalEstimates();
   el("batchModal").classList.remove("hidden");
 }
@@ -733,7 +784,19 @@ function recalculateModalEstimates() {
     quietWindowMs: 5500, replyTimeoutMs: 35000,
   };
 
-  const count = Math.max(1, Number(el("inputBatchCount").value) || 1);
+  const isBank = state.batchTargetSheet === "bank";
+  const rows = isBank ? state.rows : state.outOfBankRows;
+  let count = 1;
+
+  if (batchMode === "range") {
+    let from = Math.max(1, Number(el("inputRangeFrom").value) || 1);
+    let to = Math.max(from, Number(el("inputRangeTo").value) || from);
+    if (to > rows.length && rows.length > 0) to = rows.length;
+    count = Math.max(1, (to - from) + 1);
+    el("rangeCountInfo").textContent = `Mencakup baris #${from} s/d #${to} (${count} soal)`;
+  } else {
+    count = Math.max(1, Number(el("inputBatchCount").value) || 1);
+  }
 
   // Fast profile (assuming snappy 45-char questions, 1-bubble bot reply ~2.5s, min reading & delay bounds)
   const estFastPerQuestionMs =
@@ -839,9 +902,20 @@ function bindEvents() {
   el("btnCloseBatchModal").addEventListener("click", () => el("batchModal").classList.add("hidden"));
   el("btnCancelBatchModal").addEventListener("click", () => el("batchModal").classList.add("hidden"));
 
+  // Mode Card Selection Toggle in Batch Modal
+  el("cardBatchCount").addEventListener("click", () => setBatchModalMode("count"));
+  el("cardBatchRange").addEventListener("click", () => setBatchModalMode("range"));
+  el("radioModeCount").addEventListener("change", () => setBatchModalMode("count"));
+  el("radioModeRange").addEventListener("change", () => setBatchModalMode("range"));
+
   el("inputBatchCount").addEventListener("input", recalculateModalEstimates);
+  el("inputRangeFrom").addEventListener("input", recalculateModalEstimates);
+  el("inputRangeTo").addEventListener("input", recalculateModalEstimates);
+
   document.querySelectorAll("[data-batch-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setBatchModalMode("count");
       const preset = btn.dataset.batchPreset;
       const isBank = state.batchTargetSheet === "bank";
       const rows = isBank ? state.rows : state.outOfBankRows;
@@ -855,18 +929,45 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-range-preset]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setBatchModalMode("range");
+      const [fromStr, toStr] = btn.dataset.rangePreset.split("-");
+      el("inputRangeFrom").value = fromStr;
+      el("inputRangeTo").value = toStr;
+      recalculateModalEstimates();
+    });
+  });
+
   el("btnConfirmStartBatch").addEventListener("click", async () => {
-    const limit = Number(el("inputBatchCount").value) || 30;
     const forceAll = el("checkForceAllBatch").checked;
     const targetSheet = state.batchTargetSheet || "bank";
+    let body = { targetSheet, forceAll };
+
+    if (batchMode === "range") {
+      const from = Number(el("inputRangeFrom").value) || 1;
+      const to = Number(el("inputRangeTo").value) || from;
+      body.rangeFrom = from;
+      body.rangeTo = to;
+      body.limit = 0;
+    } else {
+      body.limit = Number(el("inputBatchCount").value) || 30;
+      body.rangeFrom = 0;
+      body.rangeTo = 0;
+    }
+
     try {
       await saveSettingsFromInputs(true);
       await api("/api/runner/start", {
         method: "POST",
-        body: { targetSheet, forceAll, limit },
+        body,
       });
       el("batchModal").classList.add("hidden");
-      toast(`Memulai pengujian batch ${targetSheet === "bank" ? "Bank Pertanyaan" : "Uji Diluar Bank"} (${limit} soal)...`);
+      const label = batchMode === "range"
+        ? `rentang #${body.rangeFrom} s/d #${body.rangeTo}`
+        : `${body.limit} soal`;
+      toast(`Memulai pengujian batch ${targetSheet === "bank" ? "Bank Pertanyaan" : "Uji Diluar Bank"} (${label})...`);
     } catch (err) {
       toast(err.message, true);
     }
@@ -887,6 +988,35 @@ function bindEvents() {
       toast("Pengujian dihentikan.");
     } catch (err) {
       toast(err.message, true);
+    }
+  });
+
+  // AI Diagnostics & Reload .env
+  el("btnReloadEnv").addEventListener("click", async () => {
+    try {
+      const res = await api("/api/settings/reload-env", { method: "POST" });
+      state.ai = res.ai;
+      state.settings = res.settings;
+      renderAIStatus();
+      populateSettingsUI();
+      toast(res.ai.enabled ? `File .env terbaca ulang: Aktif memakai ${res.ai.model}` : "File .env terbaca ulang (Smart Local Engine aktif).");
+    } catch (err) {
+      toast(`Gagal membaca ulang .env: ${err.message}`, true);
+    }
+  });
+
+  el("btnTestLLM").addEventListener("click", async () => {
+    const btn = el("btnTestLLM");
+    btn.disabled = true;
+    btn.textContent = "Menguji...";
+    try {
+      const res = await api("/api/llm/test", { method: "POST" });
+      toast(res.message);
+    } catch (err) {
+      toast(`Tes LLM Gagal: ${err.message}`, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "⚡ Tes Ping LLM";
     }
   });
 
@@ -937,17 +1067,61 @@ function bindEvents() {
     }
   });
 
-  // Out-of-Bank Sheet Actions
-  el("btnAutoGenerateOOB").addEventListener("click", async () => {
-    const year = prompt("Masukkan tahun di luar data bank yang ingin diuji ke bot:", "2026") || "2026";
+  // Advanced Out-of-Bank Generator Modal Triggers
+  el("btnOpenOOBGenModal").addEventListener("click", () => {
+    const ai = state.ai;
+    const badge = el("oobGenEngineBadge");
+    if (ai && ai.enabled) {
+      badge.textContent = `LLM Aktif: ${ai.model}`;
+      badge.style.color = "#1d4ed8";
+    } else {
+      badge.textContent = "Smart Local Engine (Gratis / Offline)";
+      badge.style.color = "#15803d";
+    }
+    el("oobGenModal").classList.remove("hidden");
+  });
+
+  el("btnCloseOOBGenModal").addEventListener("click", () => el("oobGenModal").classList.add("hidden"));
+  el("btnCancelOOBGenModal").addEventListener("click", () => el("oobGenModal").classList.add("hidden"));
+
+  document.querySelectorAll("[data-prompt-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      el("oobPromptInput").value = btn.dataset.promptPreset;
+    });
+  });
+
+  el("formOOBGenerate").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btnSubmit = el("btnSubmitOOBGen");
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = "⏳ Membangkitkan Soal...";
+
+    const promptText = el("oobPromptInput").value.trim();
+    const targetYear = el("oobTargetYear").value.trim() || "2026";
+    const count = Number(el("oobGenCount").value) || 20;
+
+    const checkedScenarios = [];
+    document.querySelectorAll("input[name='oobScenarioCheck']:checked").forEach((chk) => {
+      checkedScenarios.push(chk.value);
+    });
+
     try {
       const res = await api("/api/oob/generate", {
         method: "POST",
-        body: { count: 25, targetYear: year.trim() },
+        body: {
+          prompt: promptText,
+          targetYear,
+          count,
+          scenarios: checkedScenarios,
+        },
       });
-      toast(`Berhasil membangkitkan ${res.rows?.length || 0} variasi soal Tahun ${year} pada sheet "Uji Diluar Bank"`);
+      el("oobGenModal").classList.add("hidden");
+      toast(`Berhasil membangkitkan ${res.rows?.length || 0} variasi soal pada sheet "Uji Diluar Bank"`);
     } catch (err) {
-      toast(err.message, true);
+      toast(`Gagal membangkitkan soal: ${err.message}`, true);
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = "✨ Bangkitkan Soal Sekarang";
     }
   });
 
@@ -980,6 +1154,60 @@ function bindEvents() {
       }
     } catch (err) {
       toast(err.message, true);
+    }
+  });
+
+  // Checkbox Selection in Out-of-Bank Sheet
+  el("checkAllOOB").addEventListener("change", (e) => {
+    const checked = e.target.checked;
+    if (checked) {
+      state.outOfBankRows.forEach((r) => state.oobSelectedSet.add(r.no));
+    } else {
+      state.oobSelectedSet.clear();
+    }
+    renderOutOfBankSection();
+  });
+
+  el("oobTableBody").addEventListener("change", (e) => {
+    const chk = e.target.closest(".oob-row-checkbox");
+    if (!chk) return;
+    const no = Number(chk.dataset.no);
+    if (chk.checked) {
+      state.oobSelectedSet.add(no);
+    } else {
+      state.oobSelectedSet.delete(no);
+    }
+    updateOOBBulkToolbar();
+    el("checkAllOOB").checked = state.outOfBankRows.length > 0 && state.oobSelectedSet.size === state.outOfBankRows.length;
+  });
+
+  el("btnCancelSelectOOB").addEventListener("click", () => {
+    state.oobSelectedSet.clear();
+    renderOutOfBankSection();
+  });
+
+  el("btnDeleteSelectedOOB").addEventListener("click", async () => {
+    const count = state.oobSelectedSet.size;
+    if (count === 0) return;
+    if (!confirm(`Hapus ${count} soal terpilih dari sheet Uji Diluar Bank? (Data Bank Pertanyaan resmi tidak akan disentuh)`)) return;
+    const numbers = Array.from(state.oobSelectedSet);
+    try {
+      await api("/api/oob/delete-batch", { method: "POST", body: { numbers } });
+      state.oobSelectedSet.clear();
+      toast(`Berhasil menghapus ${count} soal terpilih dari sheet Uji Diluar Bank.`);
+    } catch (err) {
+      toast(`Gagal menghapus: ${err.message}`, true);
+    }
+  });
+
+  el("btnClearAllOOB").addEventListener("click", async () => {
+    if (!confirm("⚠️ PERINGATAN: Kosongkan SELURUH soal di sheet Uji Diluar Bank? (Sheet Bank Pertanyaan resmi tetap aman)")) return;
+    try {
+      await api("/api/oob/clear-all", { method: "POST" });
+      state.oobSelectedSet.clear();
+      toast("Seluruh soal pada sheet Uji Diluar Bank berhasil dikosongkan.");
+    } catch (err) {
+      toast(`Gagal mengosongkan: ${err.message}`, true);
     }
   });
 

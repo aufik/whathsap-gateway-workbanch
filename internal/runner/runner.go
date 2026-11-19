@@ -82,7 +82,7 @@ func normalizeTargetSheet(raw string) string {
 	return model.SheetTargetBank
 }
 
-func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int) error {
+func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeFrom, rangeTo int) error {
 	sheet := normalizeTargetSheet(targetSheet)
 	settings := r.cfg.GetSettings()
 	if strings.TrimSpace(settings.BotPhone) == "" {
@@ -94,14 +94,30 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int) error 
 	}
 
 	var queue []int
+	isRangeMode := rangeFrom > 0 && rangeTo >= rangeFrom
+
 	if sheet == model.SheetTargetOutOfBank {
-		queue = r.store.PendingOutOfBankNumbers(forceAll, limit)
+		if isRangeMode {
+			queue = r.store.PendingOutOfBankRange(rangeFrom, rangeTo, forceAll)
+		} else {
+			queue = r.store.PendingOutOfBankNumbers(forceAll, limit)
+		}
 		if len(queue) == 0 {
+			if isRangeMode {
+				return fmt.Errorf("tidak ada soal Uji Diluar Bank dalam rentang #%d s/d #%d yang dapat diuji", rangeFrom, rangeTo)
+			}
 			return errors.New("tidak ada soal Uji Diluar Bank yang belum diuji (tambahkan/generate soal terlebih dahulu)")
 		}
 	} else {
-		queue = r.store.PendingRowNumbers(forceAll, limit)
+		if isRangeMode {
+			queue = r.store.PendingRowRange(rangeFrom, rangeTo, forceAll)
+		} else {
+			queue = r.store.PendingRowNumbers(forceAll, limit)
+		}
 		if len(queue) == 0 {
+			if isRangeMode {
+				return fmt.Errorf("tidak ada soal Bank Pertanyaan dalam rentang #%d s/d #%d yang dapat diuji", rangeFrom, rangeTo)
+			}
 			return errors.New("seluruh baris pada Bank Pertanyaan sudah selesai diuji")
 		}
 	}
@@ -136,7 +152,11 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int) error 
 	if sheet == model.SheetTargetOutOfBank {
 		sheetLabel = "Sheet Uji Diluar Bank"
 	}
-	r.appendLogLocked("batch_start", 0, fmt.Sprintf("Memulai batch %s (%d soal dipilih, mode kalimat: %s)", sheetLabel, len(queue), settings.QuestionMode))
+	desc := fmt.Sprintf("%d soal dipilih", len(queue))
+	if isRangeMode {
+		desc = fmt.Sprintf("rentang #%d s/d #%d (%d soal)", rangeFrom, rangeTo, len(queue))
+	}
+	r.appendLogLocked("batch_start", 0, fmt.Sprintf("Memulai batch %s [%s, mode kalimat: %s]", sheetLabel, desc, settings.QuestionMode))
 	stSnap := r.status
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
@@ -233,7 +253,7 @@ func (r *Runner) Resume(limit int) error {
 	r.mu.Lock()
 	sheet := r.status.TargetSheet
 	r.mu.Unlock()
-	return r.StartBatch(sheet, false, limit)
+	return r.StartBatch(sheet, false, limit, 0, 0)
 }
 
 func (r *Runner) Stop() error {

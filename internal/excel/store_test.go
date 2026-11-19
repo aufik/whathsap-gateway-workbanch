@@ -86,7 +86,19 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 		t.Fatalf("unexpected row metrics/summary/media: %+v sum=%+v", updatedRow, newSum)
 	}
 
-	// 2. Append Out-of-Bank probe rows (separate SheetOutOfBank)
+	// Verify range querying on bank rows
+	rangeRows := store.PendingRowRange(1, 10, true)
+	if len(rangeRows) != 10 || rangeRows[0] != 1 || rangeRows[9] != 10 {
+		t.Fatalf("expected range 1..10 to have 10 rows, got: %v", rangeRows)
+	}
+	rangeNarrow := store.PendingRowRange(20, 25, true)
+	if len(rangeNarrow) != 6 || rangeNarrow[0] != 20 || rangeNarrow[5] != 25 {
+		t.Fatalf("expected range 20..25 to have 6 rows, got: %v", rangeNarrow)
+	}
+
+	// 2. Clear out any existing OOB rows first, then test Append, Update, and DeleteBatch
+	_, _, _ = store.ClearOutOfBank()
+
 	oobList, oobSum, err := store.AppendOutOfBankRows([]model.OutOfBankRow{
 		{
 			SourceRef:        "Ref #1 — Dinas Koperasi",
@@ -97,12 +109,25 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 			ForbiddenYear:    "2026",
 			ReferenceYear:    "2022",
 		},
+		{
+			SourceRef:        "Ref #2 — Disdik",
+			ScenarioType:     "Tahun Diluar Data (2026)",
+			BaseQuestion:     "Data SMP Denai",
+			ProbeQuestion:    "Kak minta data SMP Denai 2026",
+			ExpectedBehavior: "Bot jujur menyatakan data belum ada",
+		},
 	})
 	if err != nil {
 		t.Fatalf("AppendOutOfBankRows failed: %v", err)
 	}
-	if len(oobList) != 1 || oobSum.Total != 1 {
-		t.Fatalf("expected 1 out-of-bank row, got %d", len(oobList))
+	if len(oobList) != 2 || oobSum.Total != 2 {
+		t.Fatalf("expected 2 out-of-bank rows, got %d", len(oobList))
+	}
+
+	// Test DeleteOutOfBankBatch (delete row #2)
+	afterDel, delSum, err := store.DeleteOutOfBankBatch([]int{2})
+	if err != nil || len(afterDel) != 1 || delSum.Total != 1 {
+		t.Fatalf("DeleteOutOfBankBatch failed: len=%d sum=%+v err=%v", len(afterDel), delSum, err)
 	}
 
 	// Update Out-of-Bank row #1 with reply + metrics

@@ -413,6 +413,26 @@ func (s *Store) PendingRowNumbers(forceAll bool, limit int) []int {
 	return nums
 }
 
+func (s *Store) PendingRowRange(fromNo, toNo int, forceAll bool) []int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if fromNo <= 0 {
+		fromNo = 1
+	}
+	if toNo < fromNo {
+		toNo = fromNo
+	}
+	var nums []int
+	for _, r := range s.rows {
+		if r.No >= fromNo && r.No <= toNo {
+			if forceAll || r.ResultStatus == "" {
+				nums = append(nums, r.No)
+			}
+		}
+	}
+	return nums
+}
+
 func (s *Store) PendingOutOfBankNumbers(forceAll bool, limit int) []int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -422,6 +442,26 @@ func (s *Store) PendingOutOfBankNumbers(forceAll bool, limit int) []int {
 			nums = append(nums, r.No)
 			if limit > 0 && len(nums) >= limit {
 				break
+			}
+		}
+	}
+	return nums
+}
+
+func (s *Store) PendingOutOfBankRange(fromNo, toNo int, forceAll bool) []int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if fromNo <= 0 {
+		fromNo = 1
+	}
+	if toNo < fromNo {
+		toNo = fromNo
+	}
+	var nums []int
+	for _, r := range s.oobRows {
+		if r.No >= fromNo && r.No <= toNo {
+			if forceAll || r.ResultStatus == "" {
+				nums = append(nums, r.No)
 			}
 		}
 	}
@@ -648,6 +688,69 @@ func (s *Store) DeleteOutOfBankRow(no int) ([]model.OutOfBankRow, model.OutOfBan
 	return out, s.computeOutOfBankSummaryLocked(), nil
 }
 
+func (s *Store) DeleteOutOfBankBatch(numbers []int) ([]model.OutOfBankRow, model.OutOfBankSummary, error) {
+	if len(numbers) == 0 {
+		rows, sum := s.OutOfBankSnapshot()
+		return rows, sum, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	toDelete := make(map[int]bool, len(numbers))
+	for _, n := range numbers {
+		toDelete[n] = true
+	}
+
+	next := make([]model.OutOfBankRow, 0, len(s.oobRows))
+	newMetrics := map[int]model.RowHumanMetrics{}
+	newMedia := map[int][]string{}
+
+	for _, r := range s.oobRows {
+		if toDelete[r.No] {
+			continue
+		}
+		newNo := len(next) + 1
+		r.No = newNo
+		r.ExcelRow = newNo + 2
+		if r.Metrics.TestedAt > 0 || r.Metrics.TypingMs > 0 {
+			newMetrics[newNo] = r.Metrics
+		}
+		if len(r.MediaFiles) > 0 {
+			newMedia[newNo] = r.MediaFiles
+		}
+		next = append(next, r)
+	}
+
+	s.oobRows = next
+	s.oobMetrics = newMetrics
+	s.oobMedia = newMedia
+	s.saveMetricsSidecarLocked()
+
+	if err := s.writeOutOfBankSheetAtomicLocked(); err != nil {
+		return nil, model.OutOfBankSummary{}, err
+	}
+
+	out := make([]model.OutOfBankRow, len(s.oobRows))
+	copy(out, s.oobRows)
+	return out, s.computeOutOfBankSummaryLocked(), nil
+}
+
+func (s *Store) ClearOutOfBank() ([]model.OutOfBankRow, model.OutOfBankSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.oobRows = []model.OutOfBankRow{}
+	s.oobMetrics = map[int]model.RowHumanMetrics{}
+	s.oobMedia = map[int][]string{}
+	s.saveMetricsSidecarLocked()
+
+	if err := s.writeOutOfBankSheetAtomicLocked(); err != nil {
+		return nil, model.OutOfBankSummary{}, err
+	}
+
+	return []model.OutOfBankRow{}, s.computeOutOfBankSummaryLocked(), nil
+}
+
 func (s *Store) writeRowAtomicLocked(row model.TestRow) error {
 	f, err := excelize.OpenFile(s.filePath)
 	if err != nil {
@@ -669,7 +772,18 @@ func (s *Store) writeRowAtomicLocked(row model.TestRow) error {
 		return err
 	}
 
-	// Embed pictures into cell H if downloaded
+	// Format cell H so text stays at top and wraps cleanly
+	hStyle, _ := f.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{Vertical: "top", WrapText: true},
+	})
+	_ = f.SetCellStyle(SheetBank, fmt.Sprintf("H%d", rIdx), fmt.Sprintf("H%d", rIdx), hStyle)
+
+	// If row has pictures: adjust row height so text sits on top and picture sits neatly below text
+	if len(row.MediaFiles) > 0 {
+		_ = f.SetRowHeight(SheetBank, rIdx, 165)
+	}
+
+	// Embed pictures into cell H positioned BELOW text
 	embedRowPictures(f, SheetBank, fmt.Sprintf("H%d", rIdx), row.MediaFiles)
 
 	_ = f.UpdateLinkedValue()
@@ -760,6 +874,10 @@ func (s *Store) writeOutOfBankSheetAtomicLocked() error {
 		}
 		_ = f.SetCellStyle(SheetOutOfBank, fmt.Sprintf("A%d", rowNum), fmt.Sprintf("L%d", rowNum), bodyStyle)
 
+		if len(r.MediaFiles) > 0 {
+			_ = f.SetRowHeight(SheetOutOfBank, rowNum, 165)
+		}
+
 		// Embed pictures into cell G of Out-of-Bank sheet if present
 		embedRowPictures(f, SheetOutOfBank, fmt.Sprintf("G%d", rowNum), r.MediaFiles)
 	}
@@ -788,8 +906,9 @@ func embedRowPictures(f *excelize.File, sheet, cell string, mediaPaths []string)
 		if ext == "" {
 			ext = ".png"
 		}
-		// Scale to neat height (~85px), offset slightly if multiple pictures
-		offsetX := 5 + (i * 90)
+		// Scale to neat height (~85px), offset horizontally if multiple pictures,
+		// and place OffsetY at 85px to ensure picture sits UNDER text, never covering it
+		offsetX := 8 + (i * 95)
 		_ = f.AddPictureFromBytes(sheet, cell, &excelize.Picture{
 			Extension: ext,
 			File:      raw,
@@ -799,7 +918,7 @@ func embedRowPictures(f *excelize.File, sheet, cell string, mediaPaths []string)
 				ScaleX:       0.28,
 				ScaleY:       0.28,
 				OffsetX:      offsetX,
-				OffsetY:      6,
+				OffsetY:      85,
 				Positioning:  "oneCell",
 			},
 		})

@@ -827,6 +827,47 @@ textarea:focus {
   text-align: right;
 }
 
+/* AI Inline Controls */
+.ai-control-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Bulk Toolbar for OOB */
+.bulk-toolbar {
+  margin-top: 10px;
+  padding: 8px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bulk-count-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--danger);
+}
+.bulk-actions-btns {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.col-check {
+  width: 36px;
+  text-align: center;
+}
+.col-check input[type="checkbox"] {
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+}
+
 /* Out-of-Bank Controls */
 .oob-control-card {
   padding: 14px 18px;
@@ -839,7 +880,7 @@ textarea:focus {
 
 /* Batch Modal & Estimator */
 .modal-card.modal-medium {
-  max-width: 620px;
+  max-width: 660px;
 }
 
 .batch-recommendation-box {
@@ -855,6 +896,91 @@ textarea:focus {
 .rec-icon {
   font-size: 24px;
   line-height: 1;
+}
+
+.scenarios-checkbox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  background: var(--surface-subtle);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.oob-engine-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+/* Exclusive Mode Cards */
+.batch-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.batch-selection-card {
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0.65;
+}
+.batch-selection-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.12);
+  background: var(--surface);
+  opacity: 1;
+}
+
+.card-radio-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-radio-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.card-radio-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-light);
+  line-height: 1.35;
+}
+
+.range-inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.range-separator {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-top: 18px;
+}
+
+.range-live-info {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--primary);
+  background: #eff6ff;
+  border: 1px dashed #bfdbfe;
+  padding: 4px 8px;
+  border-radius: 5px;
+  text-align: center;
 }
 
 .input-with-max {
@@ -875,6 +1001,12 @@ textarea:focus {
   flex-wrap: wrap;
   font-size: 12px;
   font-weight: 600;
+}
+
+@media (max-width: 650px) {
+  .batch-mode-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .estimation-card {

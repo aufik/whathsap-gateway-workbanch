@@ -116,6 +116,25 @@ func Load(envPath string) (*AppConfig, error) {
 	return cfg, nil
 }
 
+func (c *AppConfig) ReloadFromDisk() error {
+	fresh, err := Load(c.EnvPath)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Host = fresh.Host
+	c.Port = fresh.Port
+	c.ExcelFile = fresh.ExcelFile
+	c.WASessionDB = fresh.WASessionDB
+	c.LLMBaseURL = fresh.LLMBaseURL
+	c.LLMAPIKey = fresh.LLMAPIKey
+	c.LLMModel = fresh.LLMModel
+	c.LLMTimeoutMs = fresh.LLMTimeoutMs
+	c.Settings = fresh.Settings
+	return nil
+}
+
 func (c *AppConfig) GetSettings() model.HumanSettings {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -80,6 +80,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/oob/rows/{no}/evaluate", s.handleOOBRowEvaluate)
 	mux.HandleFunc("PATCH /api/oob/rows/{no}", s.handleOOBRowPatch)
 	mux.HandleFunc("DELETE /api/oob/rows/{no}", s.handleOOBRowDelete)
+	mux.HandleFunc("POST /api/oob/delete-batch", s.handleOOBDeleteBatch)
+	mux.HandleFunc("POST /api/oob/clear-all", s.handleOOBClearAll)
+
+	// LLM Diagnostic & Runtime Environment Reload
+	mux.HandleFunc("POST /api/llm/test", s.handleLLMTest)
+	mux.HandleFunc("POST /api/settings/reload-env", s.handleReloadEnv)
 
 	mux.HandleFunc("GET /api/excel/download", s.handleExcelDownload)
 	mux.HandleFunc("POST /api/excel/upload", s.handleExcelUpload)
@@ -170,9 +176,11 @@ func (s *Server) handleRunnerStart(w http.ResponseWriter, r *http.Request) {
 		TargetSheet string `json:"targetSheet"`
 		ForceAll    bool   `json:"forceAll"`
 		Limit       int    `json:"limit"`
+		RangeFrom   int    `json:"rangeFrom"`
+		RangeTo     int    `json:"rangeTo"`
 	}
 	_ = decodeJSON(r, &req)
-	if err := s.runner.StartBatch(req.TargetSheet, req.ForceAll, req.Limit); err != nil {
+	if err := s.runner.StartBatch(req.TargetSheet, req.ForceAll, req.Limit, req.RangeFrom, req.RangeTo); err != nil {
 		code := http.StatusBadRequest
 		if errors.Is(err, runner.ErrAlreadyRunning) {
 			code = http.StatusConflict
@@ -335,10 +343,7 @@ func (s *Server) handleRowPatch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOOBGenerate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Count      int    `json:"count"`
-		TargetYear string `json:"targetYear"`
-	}
+	var req ai.OutOfBankGenRequest
 	_ = decodeJSON(r, &req)
 	if req.Count <= 0 {
 		req.Count = 20
@@ -348,10 +353,10 @@ func (s *Server) handleOOBGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bankRows, _ := s.store.Snapshot()
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
 	defer cancel()
 
-	candidates := s.aiEngine.GenerateOutOfBankProbes(ctx, bankRows, req.Count, req.TargetYear)
+	candidates := s.aiEngine.GenerateOutOfBankProbes(ctx, bankRows, req)
 	rows, sum, err := s.store.AppendOutOfBankRows(candidates)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -493,6 +498,85 @@ func (s *Server) handleOOBRowDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"rows":    rows,
 		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBDeleteBatch(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum menghapus baris"))
+		return
+	}
+	var req struct {
+		Numbers []int `json:"numbers"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	rows, sum, err := s.store.DeleteOutOfBankBatch(req.Numbers)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("oob_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBClearAll(w http.ResponseWriter, r *http.Request) {
+	if s.runner.Status().State == "running" {
+		writeErr(w, http.StatusConflict, errors.New("jeda atau hentikan pengujian terlebih dahulu sebelum mengosongkan baris"))
+		return
+	}
+	rows, sum, err := s.store.ClearOutOfBank()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.broker.Broadcast("oob_reloaded", map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rows":    rows,
+		"summary": sum,
+	})
+}
+
+func (s *Server) handleLLMTest(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	result, err := s.aiEngine.TestConnection(ctx)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":      true,
+		"message": result,
+		"ai":      s.cfg.AIStatus(),
+	})
+}
+
+func (s *Server) handleReloadEnv(w http.ResponseWriter, r *http.Request) {
+	if err := s.cfg.ReloadFromDisk(); err != nil {
+		writeErr(w, http.StatusInternalServerError, fmt.Errorf("gagal membaca ulang .env: %w", err))
+		return
+	}
+	aiStatus := s.cfg.AIStatus()
+	settings := s.cfg.GetSettings()
+	s.broker.Broadcast("settings_updated", settings)
+	s.broker.Broadcast("ai_status_updated", aiStatus)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"ai":       aiStatus,
+		"settings": settings,
 	})
 }
 

@@ -146,12 +146,32 @@ func TestOutOfBankGenerationAndAntiHallucinationEvaluator(t *testing.T) {
 		},
 	}
 
-	probes := eng.GenerateOutOfBankProbes(ctx, bank, 5, "2026")
+	probes := eng.GenerateOutOfBankProbes(ctx, bank, OutOfBankGenRequest{
+		Count:      5,
+		TargetYear: "2026",
+		Scenarios:  []string{"year", "territory"},
+	})
 	if len(probes) < 2 {
 		t.Fatalf("expected generated probes, got %d", len(probes))
 	}
 	if probes[0].ForbiddenYear != "2026" || probes[0].ReferenceYear != "2022" || !strings.Contains(probes[0].ProbeQuestion, "2026") {
 		t.Fatalf("expected first probe to mutate 2022 -> 2026, got: %+v", probes[0])
+	}
+
+	// Also verify custom prompt generation in local engine handles security injection & clean questions
+	complexPrompt := "tanykan pertanyaan dengan bahasa khas yang santai agak unik. dan ganti kalau ada pertannyan yang latitude longitude menjadi kota medan. dan tambahkan pertanyaan tentang promt injeksi seperti akun password, data pribadi pejabat dll yang logic"
+	promptProbes := eng.GenerateOutOfBankProbes(ctx, bank, OutOfBankGenRequest{
+		Count:  5,
+		Prompt: complexPrompt,
+	})
+	if len(promptProbes) == 0 {
+		t.Fatalf("expected prompt probes generated, got 0")
+	}
+	// Verify that the long instruction is NOT copied blindly into probeQuestion
+	for _, p := range promptProbes {
+		if strings.Contains(p.ProbeQuestion, "tanykan pertanyaan dengan bahasa khas") {
+			t.Fatalf("error: instruction leaked into probe question: %q", p.ProbeQuestion)
+		}
 	}
 
 	yearProbe := probes[0]
