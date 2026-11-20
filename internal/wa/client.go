@@ -71,6 +71,13 @@ type Client struct {
 	deviceID  string // stores deviceUUID
 	mediaRoot string
 	inFlight  sync.Map // rowNo -> deviceID (one row is handled by one device)
+
+	// Additive registry for the Live Chat engine. The legacy `collector` field
+	// above keeps driving AskBotHumanized; this map lets any number of extra
+	// subscribers coexist without stealing each other's replies. See
+	// collector.go.
+	collectors   sync.Map // collectorID -> *Collector
+	collectorSeq atomicCounter
 }
 
 func NewClient(ctx context.Context, dbPath string, onStatus func(model.WAStatus)) (*Client, error) {
@@ -706,6 +713,20 @@ func (c *Client) handleIncomingMessage(evt *events.Message) {
 	coll := c.collector
 	cli := c.cli
 	c.mu.RUnlock()
+
+	// Additive fan-out: any Collector created via RegisterCollector gets a
+	// chance to receive this bubble regardless of whether the legacy runner
+	// collector is active. Per-collector bot/timestamp filtering happens inside
+	// deliverToCollectors, so no runner behaviour changes.
+	c.deliverToCollectors(&receivedEvent{
+		id:            evt.Info.ID,
+		when:          evt.Info.Timestamp,
+		chatUser:      evt.Info.Chat.User,
+		senderUser:    evt.Info.Sender.User,
+		senderAltUser: evt.Info.SenderAlt.User,
+		text:          ExtractMessageBubble(evt.Message),
+	})
+
 	if coll == nil {
 		return
 	}
