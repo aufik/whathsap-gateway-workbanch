@@ -45,6 +45,11 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+// DB exposes the shared PostgreSQL pool so isolated modules (e.g. livechat)
+// can run their own queries against explicit schemas without duplicating the
+// connection. Callers must never rely on search_path; qualify every table.
+func (s *Store) DB() *sql.DB { return s.db }
+
 func (s *Store) Migrate(ctx context.Context) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS users (
