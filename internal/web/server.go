@@ -47,6 +47,7 @@ type Server struct {
 	auth      AuthWiring
 	workbooks *tenants.Manager
 	waPool    *wa.Manager
+	livechat  *livechatHandlers
 }
 
 func NewServer(
@@ -175,6 +176,22 @@ staticFS, err := fs.Sub(s.publicFS, ".")
 	apiMux.HandleFunc("POST /api/settings/reload-env", tenant(s.handleReloadEnvForUser))
 	apiMux.HandleFunc("GET /api/excel/download", tenant(s.handleExcelDownloadForUser))
 	apiMux.HandleFunc("POST /api/excel/upload", tenant(s.handleExcelUploadForUser))
+	// Live Chat Emulator (modul terpisah, schema livechat.*). Registered only
+	// when the manager is attached so the rest of the app keeps working without it.
+	if s.livechat != nil {
+		apiMux.HandleFunc("GET /api/livechat/devices", s.livechat.handleDevices)
+		apiMux.HandleFunc("GET /api/livechat/preview", s.livechat.handlePreview)
+		apiMux.HandleFunc("GET /api/livechat/sessions", s.livechat.handleListSessions)
+		apiMux.HandleFunc("POST /api/livechat/sessions", s.livechat.handleStartSession)
+		apiMux.HandleFunc("GET /api/livechat/sessions/{id}", s.livechat.handleSessionDetail)
+		apiMux.HandleFunc("POST /api/livechat/sessions/{id}/stop", s.livechat.handleStopSession)
+		apiMux.HandleFunc("DELETE /api/livechat/sessions/{id}", s.livechat.handleDeleteSession)
+		apiMux.HandleFunc("GET /api/livechat/assets", s.livechat.handleListAssets)
+		apiMux.HandleFunc("POST /api/livechat/assets", s.livechat.handleUploadAsset)
+		apiMux.HandleFunc("DELETE /api/livechat/assets/{id}", s.livechat.handleDeleteAsset)
+		apiMux.HandleFunc("GET /api/livechat/assets/{id}/preview", s.livechat.handleAssetPreview)
+		apiMux.HandleFunc("GET /api/livechat/events", s.livechat.handleEvents)
+	}
 
 	apiMux.Handle("GET /media/", http.HandlerFunc(s.handleMedia))
 

@@ -410,6 +410,12 @@ func (e *Engine) emit(eventType string, payload any) {
 	if e.cfg.Emitter == nil {
 		return
 	}
+	// The adapter needs the owning user id; stash it inside the payload so the
+	// engine never imports the web broker directly. Existing keys (sessionId,
+	// status, ...) are preserved by mutating the map in place.
+	if m, ok := payload.(map[string]any); ok {
+		m["userId"] = e.session.UserID
+	}
 	e.cfg.Emitter.Emit(e.session.ID, eventType, payload)
 }
 

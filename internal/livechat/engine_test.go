@@ -166,7 +166,7 @@ func newTestEngine(t *testing.T, sess Session, fake *fakeWA, st *Store) *Engine 
 		Settings:  fastSettings(),
 		AssetRoot: t.TempDir(),
 		MediaRoot: t.TempDir(),
-		Emitter:   nopEngineEmitter{},
+		Emitter:   NopEmitter{},
 	}, sess)
 	if err != nil {
 		t.Fatalf("new engine: %v", err)

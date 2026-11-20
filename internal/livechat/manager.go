@@ -27,7 +27,7 @@ type Manager struct {
 }
 
 // SettingsProvider returns the persisted human-rhythm settings for a user.
-type SettingsProvider func(ctx context.Context, userID int64) (settings any, ok bool)
+type SettingsProvider func(ctx context.Context, userID int64) (settings model.HumanSettings, ok bool)
 
 // runHandle groups the engine with its cancel func and completion channel.
 type runHandle struct {
@@ -62,7 +62,7 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 		opts.AssetRoot = UserAssetsRoot
 	}
 	if opts.Emitter == nil {
-		opts.Emitter = nopEngineEmitter{}
+		opts.Emitter = NopEmitter{}
 	}
 	return &Manager{
 		store:     opts.Store,
@@ -101,10 +101,8 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 
 	// Pull the user's human-rhythm settings; fall back to defaults when absent.
 	hs := defaultHumanSettings()
-	if raw, ok := m.settings(ctx, userID); ok {
-		if v, ok := raw.(modelHumanSettings); ok {
-			hs = v
-		}
+	if v, ok := m.settings(ctx, userID); ok {
+		hs = v
 	}
 
 	engine, err := newEngine(engineConfig{
@@ -186,10 +184,6 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	}
 	return nil
 }
-
-// modelHumanSettings is an internal alias so SettingsProvider can stay loosely
-// typed (the real type is model.HumanSettings).
-type modelHumanSettings = model.HumanSettings
 
 func defaultMediaRoot(userID int64) string {
 	return UserMediaRoot(userID)

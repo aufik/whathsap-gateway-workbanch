@@ -47,15 +47,19 @@ type DeviceResolver interface {
 // allowed (engine still runs to completion).
 type SessionEmitter func(sessionID int64, eventType string, payload any)
 
-// engine emits every phase change here; tests can inspect it.
-type engineEmitter interface {
+// EngineEmitter is the public shape the engine uses to push live updates. The
+// web layer adapts its SSEBroker; tests use a no-op.
+type EngineEmitter interface {
 	Emit(sessionID int64, eventType string, payload any)
 }
 
-// nopEngineEmitter is used by tests and by the manager when no broker exists.
-type nopEngineEmitter struct{}
+// engineEmitter is an internal alias so ManagerOptions can stay package-local.
+type engineEmitter = EngineEmitter
 
-func (nopEngineEmitter) Emit(int64, string, any) {}
+// NopEmitter is used when no broker is available (engine still runs).
+type NopEmitter struct{}
+
+func (NopEmitter) Emit(int64, string, any) {}
 
 // humanizer bundles the existing human-rhythm helpers so livechat never
 // duplicates them. Typing is the simplest reusable wrapper: pre-think delay ->

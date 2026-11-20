@@ -143,6 +143,16 @@ func main() {
 		Runners:   runnerManager,
 	})
 
+	// Live Chat Emulator: independent module, schema livechat.*. Booted only
+	// when the schema exists (read-only check inside), so a deployment that has
+	// not applied the SQL still starts cleanly without this tab.
+	if lc, lcErr := web.BuildLiveChat(ctx, dbStore.DB(), waPools, srvHandler.SettingsForUser, broker); lcErr != nil {
+		log.Printf("PERINGATAN: modul Live Chat gagal diinisialisasi: %v", lcErr)
+	} else if lc != nil {
+		srvHandler.AttachLiveChat(lc.Store, lc.Assets, lc.Manager)
+		log.Printf("Live Chat Emulator aktif (schema livechat)")
+	}
+
 	// Persist per-user workbooks (results + attachments) before shutdown so the
 	// database always mirrors the newest state.
 	go func() {
@@ -182,6 +192,9 @@ func main() {
 	sig := <-sigCh
 	log.Printf("Menerima sinyal %v, menutup antrean & koneksi WhatsApp dengan aman...", sig)
 
+	lcCtx, lcCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_ = srvHandler.ShutdownLiveChat(lcCtx)
+	lcCancel()
 	runnerManager.StopAll()
 	_ = run.Stop()
 	if err := workbooks.PersistAll(context.Background()); err != nil {
