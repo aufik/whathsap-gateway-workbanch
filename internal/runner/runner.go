@@ -18,6 +18,10 @@ import (
 
 var ErrAlreadyRunning = errors.New("pengujian sedang berjalan; silakan jeda atau tunggu selesai terlebih dahulu")
 
+// maxDeviceAttempts is how often a question may be retried after the channel
+// drops mid-conversation before it is marked as failed.
+const maxDeviceAttempts = 2
+
 type EventSink func(eventType string, payload any)
 
 type Runner struct {
@@ -31,6 +35,33 @@ type Runner struct {
 
 	status    model.RunnerStatus
 	telemetry model.HumanTelemetry
+
+	// channels maps deviceUUID to its own real-time live human cadence telemetry,
+	// allowing 1 to 3 concurrent WA channels to be monitored independently.
+	channels map[string]model.HumanTelemetry
+
+	// overrides holds the active user's behaviour settings; zero value means
+	// "use process defaults from cfg".
+	overrides model.HumanSettings
+
+	// pool holds every WhatsApp channel of the active tenant. When nil the
+	// runner falls back to the single legacy client.
+	pool *wa.Pool
+
+	// deviceAttempts counts mid-question disconnects per row so a flaky channel
+	// cannot burn the whole batch.
+	deviceAttempts map[int]int
+
+	// requeue feeds the running worker with a row that must be retried.
+	requeue chan int
+
+	// testedByDevice records which channel produced the current result, keyed by
+	// row number, so metrics can attribute each answer to a phone number.
+	testedByDevice map[int]map[string]string
+
+	// onRowSaved is invoked after a row result is persisted, so the tenant
+	// workbook can be flushed to PostgreSQL asynchronously.
+	onRowSaved func()
 }
 
 func NewRunner(
@@ -41,6 +72,7 @@ func NewRunner(
 	emit EventSink,
 ) *Runner {
 	s := cfg.GetSettings()
+	_ = s
 	r := &Runner{
 		cfg:      cfg,
 		store:    store,
@@ -63,6 +95,136 @@ func NewRunner(
 	return r
 }
 
+// SetPool attaches the tenant's device pool. With a pool present, questions are
+// distributed round-robin across idle devices instead of a single client.
+func (r *Runner) SetPool(pool *wa.Pool) {
+	r.mu.Lock()
+	r.pool = pool
+	r.mu.Unlock()
+}
+
+func (r *Runner) currentPool() *wa.Pool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.pool
+}
+
+// acquireDevice returns an idle device from the pool, or the legacy client.
+func (r *Runner) acquireDevice(rowNo int) (*wa.Client, func(), bool) {
+	pool := r.currentPool()
+	if pool == nil {
+		if r.waClient == nil {
+			return nil, func() {}, false
+		}
+		return r.waClient, func() {}, true
+	}
+
+	for attempt := 0; attempt < 2; attempt++ {
+		device := pool.NextIdle()
+		if device == nil {
+			return nil, func() {}, false
+		}
+		if device.TryLockRow(rowNo) {
+			release := func() { device.UnlockRow(rowNo) }
+			return device, release, true
+		}
+	}
+	return nil, func() {}, false
+}
+
+// activeSettings returns the caller's saved settings, falling back to defaults.
+func (r *Runner) activeSettings() model.HumanSettings {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.overrides.BotPhone != "" || r.overrides.QuestionMode != "" {
+		return r.overrides
+	}
+	return r.cfg.GetSettings()
+}
+
+func (r *Runner) noteDeviceFailure(rowNo int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.deviceAttempts == nil {
+		r.deviceAttempts = map[int]int{}
+	}
+	r.deviceAttempts[rowNo]++
+	return r.deviceAttempts[rowNo]
+}
+
+// requeueRow pushes a row back to the queue so another channel can take it.
+func (r *Runner) requeueRow(rowNo int) {
+	r.mu.Lock()
+	ch := r.requeue
+	r.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- rowNo:
+	default:
+	}
+}
+
+// persistDeviceFailure writes the final note when attempts are exhausted.
+func (r *Runner) persistDeviceFailure(rowNo int, apply func(note, status string) error) {
+	note := "Perangkat terputus 2x"
+	status := "Tidak"
+	if err := apply(note, status); err != nil {
+		r.mu.Lock()
+		r.status.LastError = err.Error()
+		r.mu.Unlock()
+	}
+}
+
+// SetDeviceIdentity stores the channel identity (uuid + phone) for the row
+// currently being processed, so the persisted metrics can record it.
+func (r *Runner) SetDeviceIdentity(rowNo int, deviceUUID, phone string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.status.ActiveRows == nil {
+		r.status.ActiveRows = map[string]int{}
+	}
+	if deviceUUID != "" {
+		r.status.ActiveRows[deviceUUID] = rowNo
+	}
+	if r.testedByDevice == nil {
+		r.testedByDevice = map[int]map[string]string{}
+	}
+	r.testedByDevice[rowNo] = map[string]string{"device_uuid": deviceUUID, "phone_number": phone}
+}
+
+func (r *Runner) takeDeviceIdentity(rowNo int) (string, string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	info := r.testedByDevice[rowNo]
+	delete(r.testedByDevice, rowNo)
+	for id, no := range r.status.ActiveRows {
+		if no == rowNo {
+			delete(r.status.ActiveRows, id)
+		}
+	}
+	if info == nil {
+		return "", ""
+	}
+	return info["device_uuid"], info["phone_number"]
+}
+
+// OnRowSaved registers a callback fired after each persisted result.
+func (r *Runner) OnRowSaved(fn func()) {
+	r.mu.Lock()
+	r.onRowSaved = fn
+	r.mu.Unlock()
+}
+
+// SetStore swaps the workbook this runner writes to (used after a per-user
+// Excel upload). Callers must ensure the runner is idle.
+func (r *Runner) SetStore(store *excel.Store) {
+	r.mu.Lock()
+	r.store = store
+	r.mu.Unlock()
+}
+
 func (r *Runner) Status() model.RunnerStatus {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -73,6 +235,19 @@ func (r *Runner) Telemetry() model.HumanTelemetry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.copyTelemetryLocked()
+}
+
+// ChannelTelemetry returns a snapshot of active per-channel telemetries.
+func (r *Runner) ChannelTelemetry() map[string]model.HumanTelemetry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]model.HumanTelemetry, len(r.channels))
+	for id, t := range r.channels {
+		cp := t
+		cp.RecentLogs = append([]model.BehaviorLog(nil), t.RecentLogs...)
+		out[id] = cp
+	}
+	return out
 }
 
 func normalizeTargetSheet(raw string) string {
@@ -88,12 +263,15 @@ func normalizeTargetSheet(raw string) string {
 
 func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeFrom, rangeTo int) error {
 	sheet := normalizeTargetSheet(targetSheet)
-	settings := r.cfg.GetSettings()
+	settings := r.activeSettings()
 	if strings.TrimSpace(settings.BotPhone) == "" {
 		return errors.New("nomor WhatsApp Bot target wajib diisi terlebih dahulu")
 	}
-	waSt := r.waClient.Status()
-	if !waSt.LoggedIn || !waSt.Connected {
+	if pool := r.currentPool(); pool != nil {
+		if pool.ConnectedCount() == 0 {
+			return errors.New("belum ada nomor WhatsApp penguji yang terhubung untuk akun ini")
+		}
+	} else if r.waClient == nil || !r.waClient.Status().LoggedIn || !r.waClient.Status().Connected {
 		return errors.New("WhatsApp penguji belum terhubung; silakan scan QR atau gunakan Pairing Code")
 	}
 
@@ -145,6 +323,8 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeF
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancelRun = cancel
+	r.requeue = make(chan int, len(queue)+8)
+	r.deviceAttempts = map[int]int{}
 	r.status = model.RunnerStatus{
 		State:          "running",
 		Mode:           "batch",
@@ -188,12 +368,15 @@ func (r *Runner) StartBatch(targetSheet string, forceAll bool, limit int, rangeF
 
 func (r *Runner) RunSingleRow(targetSheet string, rowNo int) error {
 	sheet := normalizeTargetSheet(targetSheet)
-	settings := r.cfg.GetSettings()
+	settings := r.activeSettings()
 	if strings.TrimSpace(settings.BotPhone) == "" {
 		return errors.New("nomor WhatsApp Bot target wajib diisi terlebih dahulu")
 	}
-	waSt := r.waClient.Status()
-	if !waSt.LoggedIn || !waSt.Connected {
+	if pool := r.currentPool(); pool != nil {
+		if pool.ConnectedCount() == 0 {
+			return errors.New("belum ada nomor WhatsApp penguji yang terhubung untuk akun ini")
+		}
+	} else if r.waClient == nil || !r.waClient.Status().LoggedIn || !r.waClient.Status().Connected {
 		return errors.New("WhatsApp penguji belum terhubung; silakan scan QR atau gunakan Pairing Code")
 	}
 
@@ -265,7 +448,7 @@ func (r *Runner) Pause() error {
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
 
-	r.waClient.SetPresenceAvailable(context.Background(), false)
+	r.setPresenceAll(context.Background(), false)
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 	return nil
@@ -299,141 +482,115 @@ func (r *Runner) Stop() error {
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
 
-	r.waClient.SetPresenceAvailable(context.Background(), false)
+	r.setPresenceAll(context.Background(), false)
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 	return nil
 }
 
+// maxParallelWorkers caps how many device channels may send questions at the
+// same second. Set to 3 per user requirement.
+const maxParallelWorkers = 3
+
 func (r *Runner) runQueueWorker(ctx context.Context, sheet string, queue []int, isBatch bool) {
-	prevQueueDelayMs := 0
-	prevBreakKind := ""
-
-	for idx, rowNo := range queue {
-		if ctx.Err() != nil {
-			return
-		}
-
-		settings := r.cfg.GetSettings()
-
-		r.mu.Lock()
-		r.status.CurrentRowNo = rowNo
-		stSnap := r.status
-		r.mu.Unlock()
-		r.broadcast("runner_status", stSnap)
-
-		var okStep bool
-		if sheet == model.SheetTargetOutOfBank {
-			okStep = r.executeOutOfBankRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
-		} else if sheet == model.SheetTargetStress {
-			okStep = r.executeStressTestRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
-		} else {
-			okStep = r.executeBankRow(ctx, rowNo, isBatch, settings, prevQueueDelayMs, prevBreakKind)
-		}
-		if !okStep {
-			return
-		}
-
-		hasMore := isBatch && idx < len(queue)-1
-		if !hasMore {
-			break
-		}
-
-		// Determine post-question delay: Long-Rest > Micro-Break > Distraction Spike > Normal Jitter
-		r.mu.Lock()
-		sinceBreak := r.telemetry.SinceLastBreak
-		breakTarget := r.telemetry.NextBreakTarget
-		sinceLong := r.telemetry.SinceLastLongRest
-		longTarget := r.telemetry.NextLongRestTarget
-		r.mu.Unlock()
-
-		latest := r.cfg.GetSettings()
-		nextRowNo := queue[idx+1]
-
-		if sinceLong >= longTarget {
-			restMs := randRange(latest.LongRestMinMs, latest.LongRestMaxMs)
-			nextLong := randRange(latest.LongRestEveryMin, latest.LongRestEveryMax)
-			nextMicro := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
-
-			r.waClient.SetPresenceAvailable(ctx, false)
-			r.onTelemetryHook(
-				"long_rest",
-				fmt.Sprintf("Istirahat Panjang (Long-Rest) setelah %d soal selama %.1f menit agar akun super aman...", sinceLong, float64(restMs)/60000),
-				"unavailable",
-				restMs,
-				nextRowNo,
-				func(t *model.HumanTelemetry) {
-					t.TotalLongRestsTaken++
-					t.LastCooldownMs = restMs
-					t.SinceLastLongRest = 0
-					t.NextLongRestTarget = nextLong
-					t.SinceLastBreak = 0
-					t.NextBreakTarget = nextMicro
-				},
-			)
-			prevQueueDelayMs = restMs
-			prevBreakKind = "long_rest"
-			if !sleepCancelable(ctx, time.Duration(restMs)*time.Millisecond) {
-				return
-			}
-		} else if sinceBreak >= breakTarget {
-			cooldownMs := randRange(latest.CooldownMinMs, latest.CooldownMaxMs)
-			nextTarget := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
-
-			r.waClient.SetPresenceAvailable(ctx, false)
-			r.onTelemetryHook(
-				"micro_break",
-				fmt.Sprintf("Istirahat Manusiawi (Micro-Break) setelah %d soal selama %.0f dtk...", sinceBreak, float64(cooldownMs)/1000),
-				"unavailable",
-				cooldownMs,
-				nextRowNo,
-				func(t *model.HumanTelemetry) {
-					t.TotalBreaksTaken++
-					t.LastCooldownMs = cooldownMs
-					t.SinceLastBreak = 0
-					t.NextBreakTarget = nextTarget
-				},
-			)
-			prevQueueDelayMs = cooldownMs
-			prevBreakKind = "micro_break"
-			if !sleepCancelable(ctx, time.Duration(cooldownMs)*time.Millisecond) {
-				return
-			}
-		} else {
-			isSpike := latest.DistractionSpikePct > 0 && rand.Intn(100) < latest.DistractionSpikePct
-			var interDelayMs int
-			var label string
-			if isSpike {
-				interDelayMs = randRange(latest.DistractionMinMs, latest.DistractionMaxMs)
-				prevBreakKind = "spike"
-				label = fmt.Sprintf("Jeda alami agak panjang (cek catatan Excel) selama %.1f dtk sebelum Baris #%d...", float64(interDelayMs)/1000, nextRowNo)
-			} else {
-				interDelayMs = randRange(latest.DelayMinMs, latest.DelayMaxMs)
-				prevBreakKind = "normal"
-				label = fmt.Sprintf("Jeda santai antar soal selama %.1f dtk sebelum lanjut Baris #%d...", float64(interDelayMs)/1000, nextRowNo)
-			}
-			prevQueueDelayMs = interDelayMs
-
-			r.onTelemetryHook(
-				"inter_question_delay",
-				label,
-				"available",
-				interDelayMs,
-				nextRowNo,
-				func(t *model.HumanTelemetry) {
-					t.LastInterDelayMs = interDelayMs
-				},
-			)
-			if !sleepCancelable(ctx, time.Duration(interDelayMs)*time.Millisecond) {
-				return
+	// Active worker count is min(connected devices, maxParallelWorkers, queue length)
+	workerCount := 1
+	if pool := r.currentPool(); pool != nil {
+		conn := pool.ConnectedCount()
+		if conn > 1 {
+			workerCount = conn
+			if workerCount > maxParallelWorkers {
+				workerCount = maxParallelWorkers
 			}
 		}
 	}
+	if !isBatch || len(queue) < workerCount {
+		workerCount = 1
+	}
+
+	work := make(chan int, len(queue)+64)
+	for _, no := range queue {
+		work <- no
+	}
+
+	r.mu.Lock()
+	r.status.State = "running"
+	r.status.TargetInRun = len(queue)
+	r.status.ProcessedInRun = 0
+	r.status.ActiveRows = map[string]int{}
+	r.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for wID := 0; wID < workerCount; wID++ {
+		wg.Add(1)
+		go func(workerIndex int) {
+			defer wg.Done()
+			prevQueueDelayMs := 0
+			prevBreakKind := ""
+
+			for {
+				if ctx.Err() != nil {
+					return
+				}
+
+				var rowNo int
+				select {
+				case <-ctx.Done():
+					return
+				case no := <-work:
+					rowNo = no
+				case <-time.After(200 * time.Millisecond):
+					if ch := r.dequeueRequeued(); ch != nil {
+						select {
+						case extra := <-ch:
+							work <- extra
+							continue
+						default:
+						}
+					}
+					// If the work queue is empty and no extra rows remain, this worker finishes
+					if len(work) == 0 {
+						return
+					}
+					continue
+				}
+
+				settings := r.activeSettings()
+				r.mu.Lock()
+				r.status.CurrentRowNo = rowNo
+				stSnap := r.status
+				r.mu.Unlock()
+				r.broadcast("runner_status", stSnap)
+
+				var okStep bool
+				if sheet == model.SheetTargetOutOfBank {
+					okStep = r.executeOutOfBankRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
+				} else if sheet == model.SheetTargetStress {
+					okStep = r.executeStressTestRow(ctx, rowNo, settings, prevQueueDelayMs, prevBreakKind)
+				} else {
+					okStep = r.executeBankRow(ctx, rowNo, isBatch, settings, prevQueueDelayMs, prevBreakKind)
+				}
+				if !okStep {
+					return
+				}
+
+				if isBatch {
+					prevQueueDelayMs, prevBreakKind = r.pauseBetweenQuestions(ctx, rowNo)
+					if ctx.Err() != nil {
+						return
+					}
+				}
+			}
+		}(wID)
+	}
+
+	wg.Wait()
 
 	r.mu.Lock()
 	if r.status.State == "running" {
 		r.status.State = "idle"
 		r.status.CurrentRowNo = 0
+		r.status.ActiveRows = map[string]int{}
 		now := time.Now().UnixMilli()
 		r.telemetry.Phase = "idle"
 		r.telemetry.PhaseLabel = "Sesi pengujian selesai — siap menunggu perintah berikutnya"
@@ -448,9 +605,105 @@ func (r *Runner) runQueueWorker(ctx context.Context, sheet string, queue []int, 
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
 
-	r.waClient.SetPresenceAvailable(context.Background(), false)
+	r.setPresenceAll(context.Background(), false)
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
+}
+
+func (r *Runner) pauseBetweenQuestions(ctx context.Context, rowNo int) (int, string) {
+	r.mu.Lock()
+	sinceBreak := r.telemetry.SinceLastBreak
+	breakTarget := r.telemetry.NextBreakTarget
+	sinceLong := r.telemetry.SinceLastLongRest
+	longTarget := r.telemetry.NextLongRestTarget
+	r.mu.Unlock()
+
+	latest := r.activeSettings()
+
+	if sinceLong >= longTarget {
+		restMs := randRange(latest.LongRestMinMs, latest.LongRestMaxMs)
+		nextLong := randRange(latest.LongRestEveryMin, latest.LongRestEveryMax)
+		nextMicro := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
+		r.setPresenceAll(ctx, false)
+		r.onTelemetryHook(
+			"long_rest",
+			fmt.Sprintf("Istirahat Panjang (Long-Rest) setelah %d soal selama %.1f menit agar akun aman...", sinceLong, float64(restMs)/60000),
+			"unavailable",
+			restMs,
+			rowNo,
+			func(t *model.HumanTelemetry) {
+				t.TotalLongRestsTaken++
+				t.LastCooldownMs = restMs
+				t.SinceLastLongRest = 0
+				t.NextLongRestTarget = nextLong
+				t.SinceLastBreak = 0
+				t.NextBreakTarget = nextMicro
+			},
+		)
+		sleepCancelable(ctx, time.Duration(restMs)*time.Millisecond)
+		return restMs, "long_rest"
+	}
+
+	if sinceBreak >= breakTarget {
+		cooldownMs := randRange(latest.CooldownMinMs, latest.CooldownMaxMs)
+		nextTarget := randRange(latest.CooldownEveryMin, latest.CooldownEveryMax)
+		r.setPresenceAll(ctx, false)
+		r.onTelemetryHook(
+			"micro_break",
+			fmt.Sprintf("Istirahat Manusiawi (Micro-Break) setelah %d soal selama %.0f dtk...", sinceBreak, float64(cooldownMs)/1000),
+			"unavailable",
+			cooldownMs,
+			rowNo,
+			func(t *model.HumanTelemetry) {
+				t.TotalBreaksTaken++
+				t.LastCooldownMs = cooldownMs
+				t.SinceLastBreak = 0
+				t.NextBreakTarget = nextTarget
+			},
+		)
+		sleepCancelable(ctx, time.Duration(cooldownMs)*time.Millisecond)
+		return cooldownMs, "micro_break"
+	}
+
+	isSpike := latest.DistractionSpikePct > 0 && rand.Intn(100) < latest.DistractionSpikePct
+	interDelayMs := randRange(latest.DelayMinMs, latest.DelayMaxMs)
+	kind := "normal"
+	label := fmt.Sprintf("Jeda santai antar soal selama %.1f dtk...", float64(interDelayMs)/1000)
+	if isSpike {
+		interDelayMs = randRange(latest.DistractionMinMs, latest.DistractionMaxMs)
+		kind = "spike"
+		label = fmt.Sprintf("Jeda alami agak panjang (cek catatan Excel) selama %.1f dtk...", float64(interDelayMs)/1000)
+	}
+	r.onTelemetryHook(
+		"inter_question_delay",
+		label,
+		"available",
+		interDelayMs,
+		rowNo,
+		func(t *model.HumanTelemetry) { t.LastInterDelayMs = interDelayMs },
+	)
+	sleepCancelable(ctx, time.Duration(interDelayMs)*time.Millisecond)
+	return interDelayMs, kind
+}
+
+// dequeueRequeued exposes the requeue channel for the worker select.
+func (r *Runner) dequeueRequeued() chan int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.requeue
+}
+
+// setPresenceAll toggles presence for every channel of the tenant.
+func (r *Runner) setPresenceAll(ctx context.Context, available bool) {
+	if pool := r.currentPool(); pool != nil {
+		for _, d := range pool.Devices() {
+			d.SetPresenceAvailable(ctx, available)
+		}
+		return
+	}
+	if r.waClient != nil {
+		r.waClient.SetPresenceAvailable(ctx, available)
+	}
 }
 
 func (r *Runner) executeBankRow(
@@ -486,7 +739,16 @@ func (r *Runner) executeBankRow(
 	}
 
 	rowLabel := fmt.Sprintf("Bank #%d", rowNo)
-	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+	device, release, okDevice := r.acquireDevice(rowNo)
+	if !okDevice {
+		r.appendLogLocked("device_wait", rowNo, "Menunggu perangkat WA yang tersedia...")
+		return true
+	}
+	defer release()
+	st := device.Status()
+	r.SetDeviceIdentity(rowNo, device.DeviceID(), st.AccountJID)
+
+	actualReply, mediaFiles, metrics, askErr := device.AskBotHumanized(
 		ctx,
 		rowLabel,
 		rowNo,
@@ -501,8 +763,7 @@ func (r *Runner) executeBankRow(
 			return false
 		}
 		if errors.Is(askErr, wa.ErrCircuitBreaker) {
-			r.tripCircuitBreaker(rowNo, askErr.Error())
-			return false
+			return r.handleDeviceDrop(rowNo, rowLabel, askErr)
 		}
 		r.mu.Lock()
 		r.status.LastError = askErr.Error()
@@ -513,6 +774,11 @@ func (r *Runner) executeBankRow(
 
 	metrics.QueueDelayMs = prevQueueDelayMs
 	metrics.BreakKind = prevBreakKind
+	metrics.BotTargetPhone = strings.TrimSpace(settings.BotPhone)
+	if uuid, phone := r.takeDeviceIdentity(rowNo); uuid != "" || phone != "" {
+		metrics.TestedByDevice = &model.DeviceIdentity{DeviceUUID: uuid, PhoneNumber: phone}
+		metrics.SenderPhone = phone
+	}
 
 	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
 	resStatus, notes := r.aiEngine.EvaluateReply(evalCtx, row, actualReply)
@@ -559,7 +825,16 @@ func (r *Runner) executeOutOfBankRow(
 	}
 
 	rowLabel := fmt.Sprintf("DiluarBank #%d", rowNo)
-	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+	device, release, okDevice := r.acquireDevice(rowNo)
+	if !okDevice {
+		r.appendLogLocked("device_wait", rowNo, "Menunggu perangkat WA yang tersedia...")
+		return true
+	}
+	defer release()
+	st := device.Status()
+	r.SetDeviceIdentity(rowNo, device.DeviceID(), st.AccountJID)
+
+	actualReply, mediaFiles, metrics, askErr := device.AskBotHumanized(
 		ctx,
 		rowLabel,
 		rowNo,
@@ -574,8 +849,7 @@ func (r *Runner) executeOutOfBankRow(
 			return false
 		}
 		if errors.Is(askErr, wa.ErrCircuitBreaker) {
-			r.tripCircuitBreaker(rowNo, askErr.Error())
-			return false
+			return r.handleDeviceDrop(rowNo, rowLabel, askErr)
 		}
 		r.mu.Lock()
 		r.status.LastError = askErr.Error()
@@ -586,6 +860,11 @@ func (r *Runner) executeOutOfBankRow(
 
 	metrics.QueueDelayMs = prevQueueDelayMs
 	metrics.BreakKind = prevBreakKind
+	metrics.BotTargetPhone = strings.TrimSpace(settings.BotPhone)
+	if uuid, phone := r.takeDeviceIdentity(rowNo); uuid != "" || phone != "" {
+		metrics.TestedByDevice = &model.DeviceIdentity{DeviceUUID: uuid, PhoneNumber: phone}
+		metrics.SenderPhone = phone
+	}
 
 	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
 	resStatus, notes := r.aiEngine.EvaluateOutOfBankReply(evalCtx, row, actualReply)
@@ -631,7 +910,16 @@ func (r *Runner) executeStressTestRow(
 	}
 
 	rowLabel := fmt.Sprintf("Stress #%d", rowNo)
-	actualReply, mediaFiles, metrics, askErr := r.waClient.AskBotHumanized(
+	device, release, okDevice := r.acquireDevice(rowNo)
+	if !okDevice {
+		r.appendLogLocked("device_wait", rowNo, "Menunggu perangkat WA yang tersedia...")
+		return true
+	}
+	defer release()
+	st := device.Status()
+	r.SetDeviceIdentity(rowNo, device.DeviceID(), st.AccountJID)
+
+	actualReply, mediaFiles, metrics, askErr := device.AskBotHumanized(
 		ctx,
 		rowLabel,
 		rowNo,
@@ -646,8 +934,7 @@ func (r *Runner) executeStressTestRow(
 			return false
 		}
 		if errors.Is(askErr, wa.ErrCircuitBreaker) {
-			r.tripCircuitBreaker(rowNo, askErr.Error())
-			return false
+			return r.handleDeviceDrop(rowNo, rowLabel, askErr)
 		}
 		r.mu.Lock()
 		r.status.LastError = askErr.Error()
@@ -658,6 +945,11 @@ func (r *Runner) executeStressTestRow(
 
 	metrics.QueueDelayMs = prevQueueDelayMs
 	metrics.BreakKind = prevBreakKind
+	metrics.BotTargetPhone = strings.TrimSpace(settings.BotPhone)
+	if uuid, phone := r.takeDeviceIdentity(rowNo); uuid != "" || phone != "" {
+		metrics.TestedByDevice = &model.DeviceIdentity{DeviceUUID: uuid, PhoneNumber: phone}
+		metrics.SenderPhone = phone
+	}
 
 	evalCtx, evalCancel := context.WithTimeout(ctx, 25*time.Second)
 	resStatus, notes, score, hal := r.aiEngine.EvaluateStressReply(evalCtx, row, actualReply)
@@ -696,9 +988,31 @@ func (r *Runner) recordRowCompletion(rowLabel string, rowNo int, resStatus strin
 	stSnap := r.status
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
-
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
+}
+
+// handleDeviceDrop re-queues the question when a channel disconnects mid-chat.
+// After maxDeviceAttempts failures the row is closed with a clear note so the
+// batch can finish instead of looping forever.
+func (r *Runner) handleDeviceDrop(rowNo int, rowLabel string, cause error) bool {
+	attempts := r.noteDeviceFailure(rowNo)
+	if attempts >= maxDeviceAttempts {
+		note := "Perangkat terputus 2x"
+		status := "Tidak"
+		if _, _, err := r.store.UpdateRow(rowNo, model.RowPatch{Notes: &note, ResultStatus: &status}); err == nil {
+			r.notifyRowSaved()
+		}
+		r.mu.Lock()
+		r.appendLogLocked("device_failed", rowNo, fmt.Sprintf("%s: perangkat terputus %d kali, ditandai Tidak", rowLabel, attempts))
+		r.mu.Unlock()
+		return true
+	}
+	r.mu.Lock()
+	r.appendLogLocked("device_retry", rowNo, fmt.Sprintf("%s: perangkat terputus (%v), dikembalikan ke antrean [percobaan %d]", rowLabel, cause, attempts))
+	r.mu.Unlock()
+	r.requeueRow(rowNo)
+	return true
 }
 
 func (r *Runner) onTelemetryHook(
@@ -723,9 +1037,34 @@ func (r *Runner) onTelemetryHook(
 	}
 	r.appendLogLocked(phase, rowNo, label)
 	snap := r.copyTelemetryLocked()
+
+	// Update channel-specific telemetry map
+	var devUUID string
+	if info := r.testedByDevice[rowNo]; info != nil {
+		devUUID = info["device_uuid"]
+	}
+	if devUUID != "" {
+		if r.channels == nil {
+			r.channels = map[string]model.HumanTelemetry{}
+		}
+		chTel := snap
+		chTel.DeviceUUID = devUUID
+		r.channels[devUUID] = chTel
+	}
+	allChannels := make(map[string]model.HumanTelemetry, len(r.channels))
+	for id, t := range r.channels {
+		allChannels[id] = t
+	}
 	r.mu.Unlock()
 
 	r.broadcast("human_behavior", snap)
+	if devUUID != "" {
+		r.broadcast("channel_behavior", map[string]any{
+			"deviceUuid": devUUID,
+			"telemetry":  snap,
+			"channels":   allChannels,
+		})
+	}
 }
 
 func (r *Runner) tripCircuitBreaker(rowNo int, reason string) {
@@ -750,7 +1089,7 @@ func (r *Runner) tripCircuitBreaker(rowNo int, reason string) {
 	telSnap := r.copyTelemetryLocked()
 	r.mu.Unlock()
 
-	r.waClient.SetPresenceAvailable(context.Background(), false)
+	r.setPresenceAll(context.Background(), false)
 	r.broadcast("runner_status", stSnap)
 	r.broadcast("human_behavior", telSnap)
 }
@@ -780,6 +1119,16 @@ func (r *Runner) broadcast(eventType string, payload any) {
 	}
 }
 
+// notifyRowSaved tells the tenant layer that a result reached disk.
+func (r *Runner) notifyRowSaved() {
+	r.mu.Lock()
+	fn := r.onRowSaved
+	r.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
+
 func randRange(minVal, maxVal int) int {
 	if maxVal <= minVal {
 		return minVal
@@ -799,4 +1148,12 @@ func sleepCancelable(ctx context.Context, d time.Duration) bool {
 	case <-t.C:
 		return true
 	}
+}
+
+// SetSettings replaces the behaviour settings this runner uses. The web layer
+// calls it after a user saves their own preferences.
+func (r *Runner) SetSettings(userID int64, settings model.HumanSettings) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.overrides = settings
 }

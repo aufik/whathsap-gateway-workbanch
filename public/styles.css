@@ -630,6 +630,21 @@ textarea:focus {
 .col-timing {
   width: 215px;
 }
+.col-device {
+  width: 140px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  vertical-align: top;
+}
+.device-phone-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  word-break: break-all;
+}
 .col-res {
   width: 200px;
 }
@@ -866,6 +881,83 @@ textarea:focus {
   cursor: pointer;
   width: 15px;
   height: 15px;
+}
+
+/* Multi-channel live monitors grid */
+.multi-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.channel-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.channel-card.channel-card-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.12);
+}
+
+.channel-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.channel-card-phase {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.channel-card-countdown {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.channel-card-bar-track {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.channel-card-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.15s linear;
+}
+
+.channel-card-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-light);
+  background: var(--surface-subtle);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.channel-card-metrics strong {
+  color: var(--text);
 }
 
 /* Tab Stress AI Special Styling */

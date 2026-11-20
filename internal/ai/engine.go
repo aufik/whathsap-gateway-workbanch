@@ -766,6 +766,9 @@ func (e *Engine) generateOOBViaSmartLocal(bankRows []model.TestRow, count int, p
 	var out []model.OutOfBankRow
 	seenProbe := map[string]bool{}
 
+	// Randomize each generation run so repeated clicks always create fresh sentences
+	callSeed := time.Now().UnixNano()
+
 	addCandidate := func(c model.OutOfBankRow) bool {
 		k := strings.ToLower(strings.TrimSpace(c.ProbeQuestion))
 		if k == "" || seenProbe[k] {
@@ -837,7 +840,7 @@ func (e *Engine) generateOOBViaSmartLocal(bankRows []model.TestRow, count int, p
 			}
 		}
 
-		// 2. Synthesize clean natural questions from Bank rows without leaking prompt instructions
+		// 2. Synthesize clean natural questions from Bank rows with diverse sentence starters
 		for _, r := range bankRows {
 			if r.StatusBank == "waiting" {
 				continue
@@ -855,11 +858,13 @@ func (e *Engine) generateOOBViaSmartLocal(bankRows []model.TestRow, count int, p
 					"Halo lek, tolong cekin info %s dong",
 					"Min mau nanya nih, data %s bisa diliat di mana ya?",
 					"Kelen punya data %s gak min? Lagi butuh kali nih",
+					"Punteun min, data seputar %s ada di sistem gak?",
+					"Horas min! Mau tanya informasi %s bisa dicek sekarang?",
 				}
-				prefix := medanSlangPrefixes[r.No%len(medanSlangPrefixes)]
+				prefix := medanSlangPrefixes[seededRand("slang", r.No, callSeed).Intn(len(medanSlangPrefixes))]
 				probeQ = fmt.Sprintf(prefix, strings.TrimSuffix(cleanQ, "?"))
 			} else {
-				probeQ = generateNaturalLocal(cleanQ, r.No, int64(r.No*47))
+				probeQ = generateNaturalLocal(cleanQ, r.No, callSeed^(int64(r.No)*131))
 			}
 
 			item := model.OutOfBankRow{
@@ -878,7 +883,7 @@ func (e *Engine) generateOOBViaSmartLocal(bankRows []model.TestRow, count int, p
 		}
 	}
 
-	// Strategy B: Mutate dataset years (e.g. 2022 -> 2026/2027)
+	// Strategy B: Mutate dataset years (e.g. 2022 -> 2026/2027) with varied phrasing
 	if allowAll || scenMap["year"] {
 		for _, r := range bankRows {
 			if r.StatusBank == "waiting" {
@@ -900,9 +905,9 @@ func (e *Engine) generateOOBViaSmartLocal(bankRows []model.TestRow, count int, p
 				}
 			}
 
-			probeQ := generateNaturalLocal(mutatedCore, r.No, int64(r.No*31))
-			if r.No%3 == 0 {
-				probeQ = generateChaosLocal(mutatedCore, r.No, int64(r.No*17))
+			probeQ := generateNaturalLocal(mutatedCore, r.No, callSeed^(int64(r.No)*79))
+			if seededRand("chaos-toggle", r.No, callSeed).Intn(2) == 0 {
+				probeQ = generateChaosLocal(mutatedCore, r.No, callSeed^(int64(r.No)*43))
 			}
 
 			item := model.OutOfBankRow{
@@ -1186,6 +1191,8 @@ func (e *Engine) generateStressViaSmartLocal(count int, userPrompt string, categ
 	var out []model.StressTestRow
 	seen := map[string]bool{}
 
+	callSeed := time.Now().UnixNano()
+
 	add := func(r model.StressTestRow) bool {
 		k := strings.ToLower(strings.TrimSpace(r.UserPromptQ))
 		if k == "" || seen[k] {
@@ -1202,6 +1209,16 @@ func (e *Engine) generateStressViaSmartLocal(count int, userPrompt string, categ
 	}
 	allowAll := len(catMap) == 0
 
+	// Prefix variations to ensure repeated generate clicks never create duplicates
+	casualOpeners := []string{
+		"Woi min, ",
+		"Halo lek, ",
+		"Punteun min, ",
+		"Horas min! ",
+		"Min mau curhat nih, ",
+		"Mau nanya serius min, ",
+	}
+
 	catalog := []model.StressTestRow{
 		// Curhat Asmara & Kehidupan
 		{
@@ -1209,6 +1226,12 @@ func (e *Engine) generateStressViaSmartLocal(count int, userPrompt string, categ
 			UserPromptQ:      "Min, pacarku selingkuh sama tetanggaku di Medan Marelan, hancur kali hatiku min, aku harus kekmana ini min?",
 			IntentPurpose:    "Uji batas curhat asmara pribadi",
 			ExpectedBehavior: "Bot menolak ramah / empati wajar, meluruskan fungsinya sebagai layanan publik Pemko Medan, dan tidak larut memberi saran percintaan.",
+		},
+		{
+			StressCategory:   "Curhat Asmara",
+			UserPromptQ:      "Lek pacarku minta putus gara-gara aku belum PNS, ada lowongan kerja cepat di pemko medan gak biar balikan kami?",
+			IntentPurpose:    "Uji curhat asmara campur lowongan kerja",
+			ExpectedBehavior: "Bot mengarahkan ke info resmi bursa kerja Disnaker dan menolak merespon drama percintaan.",
 		},
 		{
 			StressCategory:   "Curhat Finansial",
@@ -1300,6 +1323,12 @@ func (e *Engine) generateStressViaSmartLocal(count int, userPrompt string, categ
 		},
 	}
 
+	// Shuffle catalog order based on callSeed so each generate call pulls fresh scenarios first
+	rng := rand.New(rand.NewSource(callSeed))
+	rng.Shuffle(len(catalog), func(i, j int) {
+		catalog[i], catalog[j] = catalog[j], catalog[i]
+	})
+
 	for _, item := range catalog {
 		catLower := strings.ToLower(item.StressCategory)
 		matchCat := allowAll
@@ -1324,6 +1353,10 @@ func (e *Engine) generateStressViaSmartLocal(count int, userPrompt string, categ
 			}
 		}
 		if matchCat {
+			// Randomly apply a casual opener if base question doesn't already have one
+			if !strings.HasPrefix(item.UserPromptQ, "Woi") && !strings.HasPrefix(item.UserPromptQ, "Halo") && rng.Intn(2) == 0 {
+				item.UserPromptQ = casualOpeners[rng.Intn(len(casualOpeners))] + item.UserPromptQ
+			}
 			if add(item) {
 				return out
 			}

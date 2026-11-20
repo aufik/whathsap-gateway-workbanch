@@ -24,6 +24,12 @@ type AppConfig struct {
 	LLMModel     string
 	LLMTimeoutMs int
 
+	DatabaseURL          string
+	SessionSecret        string
+	InitialAdminUsername string
+	InitialAdminPassword string
+	InitialAdminFullName string
+
 	Settings model.HumanSettings
 }
 
@@ -83,6 +89,11 @@ func Load(envPath string) (*AppConfig, error) {
 		LLMAPIKey:    getStr("LLM_API_KEY", ""),
 		LLMModel:     getStr("LLM_MODEL", ""),
 		LLMTimeoutMs: getInt("LLM_TIMEOUT_MS", 20000),
+		DatabaseURL:          getStr("DATABASE_URL", ""),
+		SessionSecret:        getStr("SESSION_SECRET", ""),
+		InitialAdminUsername: getStr("INITIAL_ADMIN_USERNAME", "superadmin_kominfo"),
+		InitialAdminPassword: getStr("INITIAL_ADMIN_PASSWORD", ""),
+		InitialAdminFullName: getStr("INITIAL_ADMIN_FULL_NAME", "Super Admin Kominfo"),
 		Settings: model.HumanSettings{
 			BotPhone:            NormalizePhone(getStr("BOT_PHONE", "")),
 			QuestionMode:        normalizeMode(getStr("DEFAULT_QUESTION_MODE", "natural")),

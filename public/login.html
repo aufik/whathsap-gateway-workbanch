@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — WA Bot QA Workbench</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/auth.css" />
+</head>
+<body class="auth-body">
+  <main class="auth-shell">
+    <section class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-mark">QA</div>
+        <div>
+          <h1 class="brand-title">WA Bot QA Workbench</h1>
+          <p class="brand-sub">Multi-User Testing Platform — Kominfo Medan</p>
+        </div>
+      </div>
+
+      <form id="loginForm" class="auth-form" autocomplete="on">
+        <div class="field-group">
+          <label for="loginUsername">Username</label>
+          <input id="loginUsername" name="username" type="text" required autocomplete="username" placeholder="Masukkan username" />
+        </div>
+        <div class="field-group">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Masukkan password" />
+        </div>
+        <button id="loginBtn" type="submit" class="btn btn-primary auth-submit">Masuk ke Dashboard</button>
+        <div id="loginError" class="alert-banner auth-error hidden" role="alert"></div>
+      </form>
+
+      <p class="auth-footnote">Akun dibuat dan dikelola oleh administrator Kominfo Medan.</p>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("loginForm");
+    const errBox = document.getElementById("loginError");
+    const btn = document.getElementById("loginBtn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errBox.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Memproses...";
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("loginUsername").value.trim(),
+            password: document.getElementById("loginPassword").value,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal login");
+        window.location.href = "/";
+      } catch (err) {
+        errBox.textContent = err.message;
+        errBox.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Masuk ke Dashboard";
+      }
+    });
+  </script>
+</body>
+</html>

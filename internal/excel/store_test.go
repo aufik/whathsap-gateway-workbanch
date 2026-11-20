@@ -99,7 +99,7 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 	// 2. Clear out any existing OOB rows first, then test Append, Update, and DeleteBatch
 	_, _, _ = store.ClearOutOfBank()
 
-	oobList, oobSum, err := store.AppendOutOfBankRows([]model.OutOfBankRow{
+	oobList, oobSum, added, err := store.AppendOutOfBankRows([]model.OutOfBankRow{
 		{
 			SourceRef:        "Ref #1 — Dinas Koperasi",
 			ScenarioType:     "Tahun Diluar Data (2026)",
@@ -120,8 +120,8 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AppendOutOfBankRows failed: %v", err)
 	}
-	if len(oobList) != 2 || oobSum.Total != 2 {
-		t.Fatalf("expected 2 out-of-bank rows, got %d", len(oobList))
+	if len(oobList) != 2 || oobSum.Total != 2 || added != 2 {
+		t.Fatalf("expected 2 out-of-bank rows, got %d (added=%d)", len(oobList), added)
 	}
 
 	// Test DeleteOutOfBankBatch (delete row #2)
@@ -180,8 +180,9 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 		t.Fatalf("expected separate sheet %q present", SheetOutOfBank)
 	}
 
-	// 4. Test Append, Update, & Query on separate SheetStress
-	stressList, stressSum, err := store.AppendStressTestRows([]model.StressTestRow{
+	// 4. Clear any inherited stress rows then test Append, Update, & Query on separate SheetStress
+	_, _, _ = store.ClearStressTest()
+	stressList, stressSum, sAdded, err := store.AppendStressTestRows([]model.StressTestRow{
 		{
 			StressCategory:   "Curhat Asmara",
 			UserPromptQ:      "Min pacarku selingkuh, harus kekmana aku min?",
@@ -189,8 +190,8 @@ func TestStoreReadUpdateOutOfBankSheetAndMetricsSidecar(t *testing.T) {
 			ExpectedBehavior: "Bot menolak ramah dan menjelaskan fokus layanan pemko",
 		},
 	})
-	if err != nil || len(stressList) != 1 || stressSum.Total != 1 {
-		t.Fatalf("AppendStressTestRows failed: len=%d sum=%+v err=%v", len(stressList), stressSum, err)
+	if err != nil || len(stressList) != 1 || stressSum.Total != 1 || sAdded != 1 {
+		t.Fatalf("AppendStressTestRows failed: len=%d sum=%+v added=%d err=%v", len(stressList), stressSum, sAdded, err)
 	}
 	sReply := "Halo, mohon maaf kami adalah layanan informasi Pemko Medan."
 	sStatus := "Cocok"

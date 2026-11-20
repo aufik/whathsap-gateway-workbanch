@@ -15,6 +15,14 @@ const (
 	SheetTargetStress    = "stress_test"
 )
 
+// DeviceIdentity records which WhatsApp channel produced a result, so results
+// can be audited per tester number without adding Excel columns.
+type DeviceIdentity struct {
+	UserID      int64  `json:"userId,omitempty"`
+	DeviceUUID  string `json:"deviceUuid,omitempty"`
+	PhoneNumber string `json:"phoneNumber,omitempty"`
+}
+
 type RowHumanMetrics struct {
 	PreThinkMs     int    `json:"preThinkMs"`
 	TypingMs       int    `json:"typingMs"`
@@ -25,8 +33,11 @@ type RowHumanMetrics struct {
 	UnreadDelayMs  int    `json:"unreadDelayMs"`
 	ReadDurationMs int    `json:"readDurationMs"`
 	QueueDelayMs   int    `json:"queueDelayMs"`
-	BreakKind      string `json:"breakKind,omitempty"`
-	TestedAt       int64  `json:"testedAt,omitempty"`
+	BreakKind      string          `json:"breakKind,omitempty"`
+	TestedAt       int64           `json:"testedAt,omitempty"`
+	TestedByDevice *DeviceIdentity `json:"testedByDevice,omitempty"`
+	SenderPhone    string          `json:"senderPhone,omitempty"`
+	BotTargetPhone string          `json:"botTargetPhone,omitempty"`
 }
 
 type TestRow struct {
@@ -201,6 +212,8 @@ type BehaviorLog struct {
 }
 
 type HumanTelemetry struct {
+	DeviceUUID            string        `json:"deviceUuid,omitempty"`
+	DeviceLabel           string        `json:"deviceLabel,omitempty"`
 	Phase                 string        `json:"phase"`
 	PhaseLabel            string        `json:"phaseLabel"`
 	Presence              string        `json:"presence"`
@@ -239,10 +252,13 @@ type WAStatus struct {
 }
 
 type RunnerStatus struct {
-	State          string `json:"state"`
-	Mode           string `json:"mode"`
-	TargetSheet    string `json:"targetSheet"`
-	CurrentRowNo   int    `json:"currentRowNo"`
+	State        string `json:"state"`
+	Mode         string `json:"mode"`
+	TargetSheet  string `json:"targetSheet"`
+	CurrentRowNo int    `json:"currentRowNo"`
+	// ActiveRows maps a device channel to the row it is currently working on,
+	// so the table can flag several rows at once when multiple WAs run.
+	ActiveRows     map[string]int `json:"activeRows,omitempty"`
 	ProcessedInRun int    `json:"processedInRun"`
 	TargetInRun    int    `json:"targetInRun"`
 	StartedAt      int64  `json:"startedAt"`
@@ -255,18 +271,27 @@ type AIStatus struct {
 	Model    string `json:"model"`
 }
 
+type CurrentUser struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	FullName string `json:"fullName"`
+	Role     string `json:"role"`
+}
+
 type AppStateSnapshot struct {
-	Settings          HumanSettings     `json:"settings"`
-	AI                AIStatus          `json:"ai"`
-	WA                WAStatus          `json:"wa"`
-	Runner            RunnerStatus      `json:"runner"`
-	Telemetry         HumanTelemetry    `json:"telemetry"`
-	Summary           OverallSummary    `json:"summary"`
-	Rows              []TestRow         `json:"rows"`
-	OutOfBankSummary  OutOfBankSummary  `json:"outOfBankSummary"`
-	OutOfBankRows     []OutOfBankRow    `json:"outOfBankRows"`
-	StressTestSummary StressTestSummary `json:"stressTestSummary"`
-	StressTestRows    []StressTestRow   `json:"stressTestRows"`
+	Settings          HumanSettings             `json:"settings"`
+	AI                AIStatus                  `json:"ai"`
+	WA                WAStatus                  `json:"wa"`
+	Runner            RunnerStatus              `json:"runner"`
+	Telemetry         HumanTelemetry            `json:"telemetry"`
+	ChannelTelemetry  map[string]HumanTelemetry `json:"channelTelemetry,omitempty"`
+	Summary           OverallSummary            `json:"summary"`
+	Rows              []TestRow                 `json:"rows"`
+	OutOfBankSummary  OutOfBankSummary          `json:"outOfBankSummary"`
+	OutOfBankRows     []OutOfBankRow            `json:"outOfBankRows"`
+	StressTestSummary StressTestSummary         `json:"stressTestSummary"`
+	StressTestRows    []StressTestRow           `json:"stressTestRows"`
+	CurrentUser       *CurrentUser              `json:"currentUser,omitempty"`
 }
 
 type SSEEvent struct {

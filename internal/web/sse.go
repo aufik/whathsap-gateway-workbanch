@@ -7,38 +7,48 @@ import (
 	"sync"
 	"time"
 
+	"whatshap-gateway/internal/auth"
 	"whatshap-gateway/internal/model"
 )
 
+type sseClient struct {
+	userID int64
+	ch     chan []byte
+}
+
 type SSEBroker struct {
 	mu      sync.RWMutex
-	clients map[chan []byte]struct{}
+	clients map[*sseClient]struct{}
 }
 
 func NewSSEBroker() *SSEBroker {
 	return &SSEBroker{
-		clients: make(map[chan []byte]struct{}),
+		clients: make(map[*sseClient]struct{}),
 	}
 }
 
-func (b *SSEBroker) Subscribe() (chan []byte, func()) {
-	ch := make(chan []byte, 64)
+// Subscribe registers a browser stream owned by userID. Events are delivered
+// only to clients of the same user, so accounts never observe each other's
+// rows, telemetry, or WhatsApp status.
+func (b *SSEBroker) Subscribe(userID int64) (chan []byte, func()) {
+	c := &sseClient{userID: userID, ch: make(chan []byte, 64)}
+
 	b.mu.Lock()
-	b.clients[ch] = struct{}{}
+	b.clients[c] = struct{}{}
 	b.mu.Unlock()
 
 	unsubscribe := func() {
 		b.mu.Lock()
-		if _, ok := b.clients[ch]; ok {
-			delete(b.clients, ch)
-			close(ch)
+		if _, ok := b.clients[c]; ok {
+			delete(b.clients, c)
+			close(c.ch)
 		}
 		b.mu.Unlock()
 	}
-	return ch, unsubscribe
+	return c.ch, unsubscribe
 }
 
-func (b *SSEBroker) Broadcast(eventType string, payload any) {
+func (b *SSEBroker) Broadcast(userID int64, eventType string, payload any) {
 	evt := model.SSEEvent{
 		Type:      eventType,
 		Timestamp: time.Now().UnixMilli(),
@@ -52,9 +62,12 @@ func (b *SSEBroker) Broadcast(eventType string, payload any) {
 
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	for ch := range b.clients {
+	for c := range b.clients {
+		if c.userID != userID {
+			continue
+		}
 		select {
-		case ch <- msg:
+		case c.ch <- msg:
 		default:
 		}
 	}
@@ -67,12 +80,17 @@ func (b *SSEBroker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var userID int64
+	if sess, ok := auth.FromContext(r.Context()); ok {
+		userID = sess.UserID
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	ch, unsub := b.Subscribe()
+	ch, unsub := b.Subscribe(userID)
 	defer unsub()
 
 	_, _ = w.Write([]byte(": connected\n\n"))

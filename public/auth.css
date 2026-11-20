@@ -1,0 +1,182 @@
+/* Login Page Styles */
+.auth-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(circle at 20% 20%, #e2e8f0 0%, #f4f6f9 55%, #eef2f7 100%);
+}
+
+.auth-shell {
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+}
+
+.auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-submit {
+  margin-top: 4px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+}
+
+.auth-error {
+  margin-top: 4px;
+}
+
+.auth-footnote {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* Header user badge */
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-subtle);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.user-badge .user-role {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--primary);
+}
+
+.user-session-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  margin-bottom: 14px;
+}
+
+.user-badge:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Multi-device WA manager */
+.device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.device-item:hover { background: var(--surface-subtle); }
+.device-item.selected {
+  border-color: var(--primary);
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.1);
+}
+.device-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.device-name { font-size: 13px; font-weight: 700; }
+.device-phone { font-size: 11.5px; color: var(--text-light); }
+.device-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.device-add-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  .device-add-row { grid-template-columns: 1fr; }
+}
+
+/* Active row pill per channel */
+.row-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+.row-channel .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.channel-1 { color: #1d4ed8; }
+.channel-2 { color: #b45309; }
+.channel-3 { color: #6d28d9; }
+.channel-4 { color: #047857; }
+
+.qa-table tr.row-running {
+  background: #f8fbff;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.qa-table tr.row-running td:first-child { padding-left: 9px; }
+
+/* Disconnected device failure marker */
+.badge-disconnect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px dashed #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 10.5px;
+  font-weight: 700;
+}

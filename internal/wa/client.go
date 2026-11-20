@@ -64,6 +64,13 @@ type Client struct {
 	status    model.WAStatus
 	collector *replyCollector
 	onStatus  func(model.WAStatus)
+
+	// Device identity + media root let several numbers of the same user run in
+	// parallel without sharing collectors or overlapping attachments.
+	userID    int64
+	deviceID  string // stores deviceUUID
+	mediaRoot string
+	inFlight  sync.Map // rowNo -> deviceID (one row is handled by one device)
 }
 
 func NewClient(ctx context.Context, dbPath string, onStatus func(model.WAStatus)) (*Client, error) {
@@ -115,6 +122,53 @@ func (c *Client) AutoConnectIfLoggedIn(ctx context.Context) {
 	if hasSession {
 		_ = c.Connect(ctx)
 	}
+}
+
+// DeviceID returns the stable identifier of this device channel.
+func (c *Client) DeviceID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.deviceID
+}
+
+// SetDeviceMeta sets the tenant user ID, device identity (deviceUUID) and the
+// directory where attachments are parked (data/users/{userID}/downloads).
+func (c *Client) SetDeviceMeta(userID int64, deviceUUID, mediaRoot string) {
+	c.mu.Lock()
+	c.userID = userID
+	c.deviceID = deviceUUID
+	c.mediaRoot = mediaRoot
+	c.mu.Unlock()
+}
+
+// UserID returns the owning tenant user ID.
+func (c *Client) UserID() int64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.userID
+}
+
+// mediaPrefix is the URL prefix under which this device's attachments are served.
+// Shapes as /media/{userID}/{filename} so the web server can authenticate by tenant.
+func (c *Client) mediaPrefix() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.userID <= 0 {
+		return "/media/"
+	}
+	return fmt.Sprintf("/media/%d/", c.userID)
+}
+
+// TryLockRow reserves a question for this device. It returns false when another
+// device already owns it, which is what keeps the round-robin free of clashes.
+func (c *Client) TryLockRow(rowNo int) bool {
+	_, loaded := c.inFlight.LoadOrStore(rowNo, c.DeviceID())
+	return !loaded
+}
+
+// UnlockRow releases a question reservation.
+func (c *Client) UnlockRow(rowNo int) {
+	c.inFlight.Delete(rowNo)
 }
 
 func (c *Client) Status() model.WAStatus {
@@ -432,7 +486,12 @@ func (c *Client) AskBotHumanized(
 		return "", nil, metrics, err
 	}
 
-	combinedReply, downloadedPaths := formatAndPersistBubbles(bubbles, rowLabel, rowNo)
+	c.mu.RLock()
+	saveDir := c.mediaRoot
+	c.mu.RUnlock()
+	// Media paths are /media/{owner}/{file}; the owner segment is supplied by
+	// the caller through device metadata (user id), so attachments stay scoped.
+	combinedReply, downloadedPaths := formatAndPersistBubbles(bubbles, rowLabel, rowNo, saveDir, c.mediaPrefix())
 
 	// 6. Unread Reaction Delay (Before MarkRead) + Blue-Tick MarkRead + Reading Comprehension Delay
 	if len(bubbles) > 0 {
@@ -725,12 +784,14 @@ func (c *Client) downloadMediaIfPresent(cli *whatsmeow.Client, msg *waE2E.Messag
 	return nil, "", ""
 }
 
-func formatAndPersistBubbles(bubbles []collectedBubble, rowLabel string, rowNo int) (string, []string) {
+func formatAndPersistBubbles(bubbles []collectedBubble, rowLabel string, rowNo int, saveDir, mediaPrefix string) (string, []string) {
 	if len(bubbles) == 0 {
 		return "", nil
 	}
 
-	saveDir := filepath.Join("data", "downloads")
+	if saveDir == "" {
+		saveDir = filepath.Join("data", "downloads")
+	}
 	_ = os.MkdirAll(saveDir, 0755)
 
 	var downloadedPaths []string
@@ -746,8 +807,8 @@ func formatAndPersistBubbles(bubbles []collectedBubble, rowLabel string, rowNo i
 			filename := fmt.Sprintf("%s_b%d_%d%s", cleanLabel, idx+1, time.Now().UnixMilli(), ext)
 			diskPath := filepath.Join(saveDir, filename)
 			if err := os.WriteFile(diskPath, b.mediaBytes, 0644); err == nil {
-				// Record relative web path
-				downloadedPaths = append(downloadedPaths, "/media/"+filename)
+				// Record the scoped web path so only the owner can fetch it.
+				downloadedPaths = append(downloadedPaths, mediaPrefix+filename)
 			}
 		}
 	}

@@ -24,6 +24,11 @@ const state = {
   },
   activeTab: "tab-bank",
   batchTargetSheet: "bank",
+  currentUser: null,
+  devices: [],
+  deviceStatuses: {},
+  channelTelemetry: {},
+  selectedDeviceUuid: "",
 };
 
 const el = (id) => document.getElementById(id);
@@ -86,6 +91,32 @@ function formatReplyHTML(raw, mediaFiles) {
   safe = safe.replace(/\[Berkas\]/gi, `<span class="tag-media">[Berkas]</span>`);
   safe = safe.replace(/\[Koordinat\]/gi, `<span class="tag-media tag-coord">[Koordinat]</span>`);
   return `<div class="reply-pre">${safe}</div>${mediaHtml}`;
+}
+
+function renderSenderPhoneHTML(m, rowNo) {
+  // If row is actively running, show which device channel is processing it
+  const activeList = devicesForRow(rowNo);
+  if (activeList.length > 0) {
+    const dev = activeList[0];
+    return `<span class="device-phone-badge" style="color:var(--primary); font-weight:700" title="${escapeHTML(dev.phone)}">▶ ${escapeHTML(dev.phone || dev.label)}</span>`;
+  }
+  // Otherwise show the phone that completed the test
+  const phone = m?.senderPhone || m?.testedByDevice?.phoneNumber || "";
+  if (!phone) {
+    return `<span class="reply-empty"></span>`; // left completely blank as requested
+  }
+  // Clean JID suffix if present (@s.whatsapp.net)
+  const clean = phone.replace(/@.*$/, "");
+  return `<span class="device-phone-badge">${escapeHTML(clean)}</span>`;
+}
+
+function renderTargetPhoneHTML(m) {
+  const phone = m?.botTargetPhone || "";
+  if (!phone) {
+    return `<span class="reply-empty"></span>`; // left completely blank as requested
+  }
+  const clean = phone.replace(/@.*$/, "");
+  return `<span class="device-phone-badge">${escapeHTML(clean)}</span>`;
 }
 
 function renderTimingCardHTML(m) {
@@ -165,6 +196,8 @@ function applyFullSnapshot(snap) {
   state.stressMap.clear();
   for (const r of state.stressTestRows) state.stressMap.set(r.no, r);
 
+  state.channelTelemetry = snap.channelTelemetry || {};
+
   populateSettingsUI();
   populateFilterDropdowns();
   renderAIStatus();
@@ -196,10 +229,18 @@ function connectSSE() {
 
 function handleSSEEvent(evt) {
   switch (evt.type) {
-    case "wa_status":
-      state.wa = evt.payload;
-      renderWAStatus();
+    case "wa_status": {
+      const p = evt.payload || {};
+      if (p.deviceUuid) {
+        state.deviceStatuses = { ...(state.deviceStatuses || {}), [p.deviceUuid]: p.status };
+        renderDeviceList();
+        renderWAStatus();
+      } else {
+        state.wa = p;
+        renderWAStatus();
+      }
       break;
+    }
     case "ai_status_updated":
       state.ai = evt.payload;
       renderAIStatus();
@@ -230,6 +271,14 @@ function handleSSEEvent(evt) {
       state.telemetry = evt.payload;
       renderTelemetry();
       break;
+    case "channel_behavior": {
+      const p = evt.payload || {};
+      if (p.channels) {
+        state.channelTelemetry = p.channels;
+        renderTelemetry();
+      }
+      break;
+    }
     case "row_updated": {
       const r = evt.payload;
       state.rowMap.set(r.no, r);
@@ -357,47 +406,51 @@ function renderAIStatus() {
 }
 
 function renderWAStatus() {
-  const wa = state.wa;
-  if (!wa) return;
+  const devices = state.devices || [];
+  const statuses = state.deviceStatuses || {};
+  let connectedCount = 0;
+  for (const d of devices) {
+    const st = statuses[d.deviceUuid] || {};
+    if (st.loggedIn && st.connected) connectedCount++;
+  }
+
   const dot = el("waDot");
   const lbl = el("waLabel");
+  if (devices.length === 0) {
+    dot.className = "status-dot offline";
+    lbl.textContent = "WA Penguji: Belum Ada Nomor";
+  } else if (connectedCount > 0) {
+    dot.className = "status-dot online";
+    lbl.textContent = `${connectedCount} dari ${devices.length} WA Terhubung`;
+  } else {
+    dot.className = "status-dot connecting";
+    lbl.textContent = `0 dari ${devices.length} WA Terhubung`;
+  }
+
   const modalStatus = el("waModalStatusBox");
-  const loginBox = el("waLoginControls");
-  const logoutBox = el("waLogoutControls");
+  if (modalStatus) {
+    const active = devices.filter((d) => {
+      const st = statuses[d.deviceUuid] || {};
+      return st.loggedIn && st.connected;
+    });
+    modalStatus.innerHTML = `<strong>${active.length} perangkat aktif</strong> dari ${devices.length} terdaftar`
+      + (active.length ? `<br/><span class="muted">${active.map((d) => escapeHTML(d.phoneNumber)).join(" • ")}</span>` : "");
+  }
+
   const qrContainer = el("qrContainer");
   const qrImg = el("qrImage");
   const pairBox = el("pairingCodeBox");
+  const selected = statuses[state.selectedDeviceUuid] || {};
 
-  if (wa.connected && wa.loggedIn) {
-    dot.className = "status-dot online";
-    const who = wa.pushName ? `${wa.pushName} (${wa.accountJid})` : wa.accountJid;
-    lbl.textContent = `WA Terhubung: ${who || "Aktif"}`;
-    modalStatus.innerHTML = `<strong>Terhubung &amp; Siap Menguji</strong><br/><span class="muted">Akun: ${escapeHTML(who)}</span>`;
-    loginBox.classList.add("hidden");
-    logoutBox.classList.remove("hidden");
-  } else if (wa.loggedIn && !wa.connected) {
-    dot.className = "status-dot connecting";
-    lbl.textContent = "WA Tersimpan (Klik Sambung)";
-    modalStatus.innerHTML = `<strong>Sesi Tersimpan (Belum Tersambung)</strong><br/><span class="muted">Klik tombol di bawah untuk menyambungkan.</span>`;
-    loginBox.classList.remove("hidden");
-    logoutBox.classList.remove("hidden");
-  } else {
-    dot.className = "status-dot offline";
-    lbl.textContent = "WA Penguji: Belum Terhubung";
-    modalStatus.innerHTML = `<strong>Belum Tertaut</strong><br/><span class="muted">${escapeHTML(wa.lastError || "Gunakan nomor WA sekunder/tester melalui QR atau Kode Pairing.")}</span>`;
-    loginBox.classList.remove("hidden");
-    logoutBox.classList.add("hidden");
-  }
-
-  if (wa.qrDataUrl && !wa.connected) {
-    qrImg.src = wa.qrDataUrl;
+  if (selected.qrDataUrl && !selected.connected) {
+    qrImg.src = selected.qrDataUrl;
     qrContainer.classList.remove("hidden");
   } else {
     qrContainer.classList.add("hidden");
   }
 
-  if (wa.pairingCode && !wa.connected) {
-    pairBox.textContent = wa.pairingCode;
+  if (selected.pairingCode && !selected.connected) {
+    pairBox.textContent = selected.pairingCode;
     pairBox.classList.remove("hidden");
   } else {
     pairBox.classList.add("hidden");
@@ -468,24 +521,135 @@ function renderTelemetry() {
     })
     .join("");
 
+  renderMultiChannelGrid();
   updateLiveCountdownTick();
 }
 
+function renderMultiChannelGrid() {
+  const grid = el("multiChannelGrid");
+  const single = el("singleTelemetryGrid");
+  if (!grid || !single) return;
+
+  const devices = state.devices || [];
+  const statuses = state.deviceStatuses || {};
+  const channels = state.channelTelemetry || {};
+  const activeDevs = devices.filter((d) => {
+    const st = statuses[d.deviceUuid] || {};
+    return st.loggedIn && st.connected;
+  });
+
+  // When 2 or more devices are connected, expand the top panel into multi-channel cards
+  // and hide the global single-channel countdown to avoid duplicate/jumping timers.
+  const headerCountdownBox = document.querySelector(".telemetry-countdown-box");
+  const headerPhaseBarTrack = document.querySelector(".phase-progress-track");
+  const humanPhaseLabel = el("humanPhaseLabel");
+  const humanPhaseBadge = el("humanPhaseBadge");
+  const humanPresenceBadge = el("humanPresenceBadge");
+
+  if (activeDevs.length >= 2) {
+    grid.classList.remove("hidden");
+    single.classList.add("hidden");
+    if (headerCountdownBox) headerCountdownBox.classList.add("hidden");
+    if (headerPhaseBarTrack) headerPhaseBarTrack.classList.add("hidden");
+
+    // Summarize aggregate multi-WA status cleanly in the header
+    const busyCount = activeDevs.filter((d) => {
+      const t = channels[d.deviceUuid] || {};
+      return t.phase && t.phase !== "idle" && t.phase !== "paused";
+    }).length;
+    if (humanPhaseBadge) {
+      humanPhaseBadge.textContent = "MULTI-WA AKTIF";
+      humanPhaseBadge.className = "badge badge-active";
+    }
+    if (humanPresenceBadge) {
+      humanPresenceBadge.textContent = `${activeDevs.length} Jalur Terhubung`;
+    }
+    if (humanPhaseLabel) {
+      humanPhaseLabel.textContent = busyCount > 0
+        ? `${busyCount} WA sedang memproses soal secara paralel, ${activeDevs.length - busyCount} standby`
+        : `${activeDevs.length} nomor WA aktif siap menerima giliran soal paralel`;
+    }
+
+    grid.innerHTML = activeDevs
+      .map((d, i) => {
+        const t = channels[d.deviceUuid] || {};
+        const cls = channelClass(i);
+        const phase = (t.phase || "idle").toUpperCase().replaceAll("_", " ");
+        const phaseLabel = t.phaseLabel || "Standby / Siap menerima giliran soal";
+        const remSec = t.phaseEndsAt && t.phaseEndsAt > Date.now()
+          ? ((t.phaseEndsAt - Date.now()) / 1000).toFixed(1) + " dtk"
+          : "0.0 dtk";
+        const activeRow = t.activeRowNo ? `• Soal #${t.activeRowNo}` : "";
+        return `
+          <div class="channel-card ${t.phase && t.phase !== 'idle' ? 'channel-card-active' : ''}" data-channel-uuid="${escapeHTML(d.deviceUuid)}">
+            <div class="channel-card-header">
+              <span class="channel-card-title ${cls}">
+                <span class="dot"></span>WA-${i + 1} (${escapeHTML(d.deviceName || d.phoneNumber)})
+              </span>
+              <span class="channel-card-countdown" data-channel-countdown="${escapeHTML(d.deviceUuid)}">${remSec}</span>
+            </div>
+            <div class="channel-card-bar-track">
+              <div class="channel-card-bar-fill" data-channel-bar="${escapeHTML(d.deviceUuid)}" style="width: 0%"></div>
+            </div>
+            <div class="channel-card-phase">
+              <strong style="color:var(--text)">${escapeHTML(phase)}</strong> ${activeRow}
+              <div style="font-size:11px; color:var(--text-light); margin-top:2px">${escapeHTML(phaseLabel)}</div>
+            </div>
+            <div class="channel-card-metrics">
+              <div>Ketik: <strong>${t.lastTypingChars || 0}h</strong> (${((t.lastTypingDurationMs || 0) / 1000).toFixed(1)}s)</div>
+              <div>Tunggu Bot: <strong>${((t.lastReadDurationMs || 0) / 1000).toFixed(1)}s</strong></div>
+              <div>Sblm Read: <strong>${((t.lastUnreadDelayMs || 0) / 1000).toFixed(1)}s</strong></div>
+              <div>Jeda: <strong>${((t.lastInterDelayMs || 0) / 1000).toFixed(1)}s</strong></div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  } else {
+    grid.classList.add("hidden");
+    single.classList.remove("hidden");
+    if (headerCountdownBox) headerCountdownBox.classList.remove("hidden");
+    if (headerPhaseBarTrack) headerPhaseBarTrack.classList.remove("hidden");
+  }
+}
+
 function updateLiveCountdownTick() {
+  const now = Date.now();
+
+  // 1. Update single main banner countdown
   const t = state.telemetry;
   const cdEl = el("humanCountdown");
   const barEl = el("humanPhaseBar");
-  if (!t || !t.phaseEndsAt || !t.phaseDurationMs || t.phase === "idle" || t.phase === "paused" || t.phase === "circuit_breaker") {
-    cdEl.textContent = "0.0 dtk";
-    barEl.style.width = "0%";
-    return;
+  if (cdEl && barEl) {
+    if (!t || !t.phaseEndsAt || !t.phaseDurationMs || t.phase === "idle" || t.phase === "paused" || t.phase === "circuit_breaker") {
+      cdEl.textContent = "0.0 dtk";
+      barEl.style.width = "0%";
+    } else {
+      const remMs = Math.max(0, t.phaseEndsAt - now);
+      const elapsed = Math.min(t.phaseDurationMs, Math.max(0, now - t.phaseStartedAt));
+      const pct = Math.min(100, Math.max(0, (elapsed / t.phaseDurationMs) * 100));
+      cdEl.textContent = `${(remMs / 1000).toFixed(1)} dtk`;
+      barEl.style.width = `${pct.toFixed(1)}%`;
+    }
   }
-  const now = Date.now();
-  const remMs = Math.max(0, t.phaseEndsAt - now);
-  const elapsed = Math.min(t.phaseDurationMs, Math.max(0, now - t.phaseStartedAt));
-  const pct = Math.min(100, Math.max(0, (elapsed / t.phaseDurationMs) * 100));
-  cdEl.textContent = `${(remMs / 1000).toFixed(1)} dtk`;
-  barEl.style.width = `${pct.toFixed(1)}%`;
+
+  // 2. Update multi-channel cards countdown for each active WA independently
+  const channels = state.channelTelemetry || {};
+  document.querySelectorAll("[data-channel-countdown]").forEach((cd) => {
+    const uuid = cd.dataset.channelCountdown;
+    const chT = channels[uuid];
+    const bar = document.querySelector(`[data-channel-bar="${uuid}"]`);
+    if (!chT || !chT.phaseEndsAt || !chT.phaseDurationMs || chT.phase === "idle" || chT.phase === "paused" || chT.phase === "circuit_breaker") {
+      cd.textContent = "0.0 dtk";
+      if (bar) bar.style.width = "0%";
+    } else {
+      const remMs = Math.max(0, chT.phaseEndsAt - now);
+      const elapsed = Math.min(chT.phaseDurationMs, Math.max(0, now - chT.phaseStartedAt));
+      const pct = Math.min(100, Math.max(0, (elapsed / chT.phaseDurationMs) * 100));
+      cd.textContent = `${(remMs / 1000).toFixed(1)} dtk`;
+      if (bar) bar.style.width = `${pct.toFixed(1)}%`;
+    }
+  });
 }
 
 function renderSummaryAndOPD() {
@@ -548,10 +712,9 @@ function renderOutOfBankSection() {
   const allSelected = state.outOfBankRows.length > 0 && state.oobSelectedSet.size === state.outOfBankRows.length;
   el("checkAllOOB").checked = allSelected;
 
-  const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "out_of_bank" ? state.runner.currentRowNo : 0;
   tbody.innerHTML = state.outOfBankRows
     .map((r) => {
-      const cls = r.no === activeNo ? ` class="row-running"` : "";
+      const cls = rowIsActive(r.no) ? ` class="row-running"` : "";
       return `<tr id="oob-row-${r.no}"${cls}>${buildOOBRowInnerHTML(r)}</tr>`;
     })
     .join("");
@@ -624,9 +787,12 @@ function buildRowInnerHTML(r) {
     : `<div class="q-input-text"><span class="reply-empty">Otomatis dibuat saat diuji (sesuai mode)</span></div>`;
 
   const noteHtml = r.notes ? `<div class="note-preview">${escapeHTML(r.notes)}</div>` : "";
+  const disconnectHtml = (r.notes || "").toLowerCase().includes("perangkat terputus")
+    ? `<span class="badge-disconnect">⛔ Perangkat terputus 2x</span>`
+    : "";
 
   return `
-    <td class="col-no">#${r.no}</td>
+    <td class="col-no">${rowChannelBadgeHTML(r.no)}#${r.no}</td>
     <td class="col-meta">
       <div class="opd-name-cell">${escapeHTML(r.opd)}</div>
       <div class="row-btn-group">
@@ -648,9 +814,11 @@ function buildRowInnerHTML(r) {
     <td class="col-a">${formatReplyHTML(r.expectedReply, null)}</td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
+    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
+    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
-        <div>${resBadge}</div>
+        <div>${resBadge} ${disconnectHtml}</div>
         ${noteHtml}
         <div class="row-btn-group">
           <button type="button" class="btn btn-primary btn-xs" data-action="run" data-no="${r.no}">Uji ke WA</button>
@@ -672,12 +840,15 @@ function buildOOBRowInnerHTML(r) {
 
   const isChecked = state.oobSelectedSet.has(r.no) ? "checked" : "";
   const noteHtml = r.notes ? `<div class="note-preview">${escapeHTML(r.notes)}</div>` : "";
+  const disconnectHtml = (r.notes || "").toLowerCase().includes("perangkat terputus")
+    ? `<span class="badge-disconnect">⛔ Perangkat terputus 2x</span>`
+    : "";
 
   return `
     <td class="col-check">
       <input type="checkbox" class="oob-row-checkbox" data-no="${r.no}" ${isChecked} />
     </td>
-    <td class="col-no">#${r.no}</td>
+    <td class="col-no">${rowChannelBadgeHTML(r.no)}#${r.no}</td>
     <td class="col-meta">
       <div class="opd-name-cell">${escapeHTML(r.sourceRef)}</div>
       <span class="badge badge-outline">${escapeHTML(r.scenarioType)}</span>
@@ -698,9 +869,11 @@ function buildOOBRowInnerHTML(r) {
     </td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
+    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
+    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
-        <div>${resBadge}</div>
+        <div>${resBadge} ${disconnectHtml}</div>
         ${noteHtml}
         <div class="row-btn-group">
           <button type="button" class="btn btn-primary btn-xs" data-oob-action="run" data-no="${r.no}">Uji ke WA</button>
@@ -722,12 +895,15 @@ function buildStressRowInnerHTML(r) {
 
   const isChecked = state.stressSelectedSet.has(r.no) ? "checked" : "";
   const noteHtml = r.notes ? `<div class="note-preview">${escapeHTML(r.notes)}</div>` : "";
+  const disconnectHtml = (r.notes || "").toLowerCase().includes("perangkat terputus")
+    ? `<span class="badge-disconnect">⛔ Perangkat terputus 2x</span>`
+    : "";
 
   return `
     <td class="col-check">
       <input type="checkbox" class="stress-row-checkbox" data-no="${r.no}" ${isChecked} />
     </td>
-    <td class="col-no">#${r.no}</td>
+    <td class="col-no">${rowChannelBadgeHTML(r.no)}#${r.no}</td>
     <td class="col-meta">
       <div class="opd-name-cell" style="color:#5b21b6">${escapeHTML(r.stressCategory)}</div>
       <div style="font-size:11.5px; color:var(--text-light)">${escapeHTML(r.intentPurpose)}</div>
@@ -746,9 +922,11 @@ function buildStressRowInnerHTML(r) {
     </td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
+    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
+    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
-        <div>${resBadge}</div>
+        <div>${resBadge} ${disconnectHtml}</div>
         ${noteHtml}
         <div class="row-btn-group">
           <button type="button" class="btn btn-primary btn-xs" data-stress-action="run" data-no="${r.no}" style="background:#5b21b6; border-color:#4c1d95">Uji ke WA</button>
@@ -787,10 +965,9 @@ function renderStressSection() {
   const allSelected = state.stressTestRows.length > 0 && state.stressSelectedSet.size === state.stressTestRows.length;
   el("checkAllStress").checked = allSelected;
 
-  const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "stress_test" ? state.runner.currentRowNo : 0;
   tbody.innerHTML = state.stressTestRows
     .map((r) => {
-      const cls = r.no === activeNo ? ` class="row-running"` : "";
+      const cls = rowIsActive(r.no) ? ` class="row-running"` : "";
       return `<tr id="stress-row-${r.no}"${cls}>${buildStressRowInnerHTML(r)}</tr>`;
     })
     .join("");
@@ -813,10 +990,38 @@ function patchSingleStressRow(no) {
   if (!r) return;
   const existing = document.getElementById(`stress-row-${no}`);
   if (existing) {
-    const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "stress_test" ? state.runner.currentRowNo : 0;
-    existing.className = r.no === activeNo ? "row-running" : "";
+    existing.className = rowIsActive(r.no) ? "row-running" : "";
     existing.innerHTML = buildStressRowInnerHTML(r);
   }
+}
+
+
+/* Channel chip helpers: map a row number to the device currently working it. */
+function devicesForRow(rowNo) {
+  const active = state.runner?.activeRows || {};
+  const ids = Object.keys(active).filter((id) => active[id] === rowNo);
+  return ids.map((id) => {
+    const idx = (state.devices || []).findIndex((d) => d.deviceUuid === id);
+    const dev = idx >= 0 ? state.devices[idx] : null;
+    return {
+      uuid: id,
+      label: dev ? `WA-${idx + 1}` : `WA-${id.slice(0, 4)}`,
+      phone: dev ? dev.phoneNumber : "",
+      cls: channelClass(idx >= 0 ? idx : 0),
+    };
+  });
+}
+
+function rowChannelBadgeHTML(rowNo) {
+  const list = devicesForRow(rowNo);
+  if (list.length === 0) return "";
+  return list
+    .map((d) => `<span class="row-channel ${d.cls}" title="${escapeHTML(d.phone)}"><span class="dot"></span>${escapeHTML(d.label)}</span>`)
+    .join(" ");
+}
+
+function rowIsActive(rowNo) {
+  return devicesForRow(rowNo).length > 0;
 }
 
 function renderTable() {
@@ -829,10 +1034,9 @@ function renderTable() {
     return;
   }
 
-  const activeNo = state.runner?.state === "running" && state.runner.targetSheet !== "out_of_bank" ? state.runner.currentRowNo : 0;
   tbody.innerHTML = filtered
     .map((r) => {
-      const cls = r.no === activeNo ? ` class="row-running"` : "";
+      const cls = rowIsActive(r.no) ? ` class="row-running"` : "";
       return `<tr id="qa-row-${r.no}"${cls}>${buildRowInnerHTML(r)}</tr>`;
     })
     .join("");
@@ -853,8 +1057,7 @@ function patchSingleTableRow(no) {
     return;
   }
   if (existing) {
-    const activeNo = state.runner?.state === "running" && state.runner.targetSheet !== "out_of_bank" ? state.runner.currentRowNo : 0;
-    existing.className = r.no === activeNo ? "row-running" : "";
+    existing.className = rowIsActive(r.no) ? "row-running" : "";
     existing.innerHTML = buildRowInnerHTML(r);
   }
 }
@@ -864,8 +1067,7 @@ function patchSingleOOBRow(no) {
   if (!r) return;
   const existing = document.getElementById(`oob-row-${no}`);
   if (existing) {
-    const activeNo = state.runner?.state === "running" && state.runner.targetSheet === "out_of_bank" ? state.runner.currentRowNo : 0;
-    existing.className = r.no === activeNo ? "row-running" : "";
+    existing.className = rowIsActive(r.no) ? "row-running" : "";
     existing.innerHTML = buildOOBRowInnerHTML(r);
   }
 }
@@ -1730,6 +1932,17 @@ function switchTab(tabId) {
   document.querySelectorAll(".tab-section").forEach((sec) => {
     sec.classList.toggle("active", sec.id === tabId);
   });
+
+  // Re-render target table immediately on tab switch to avoid blank views
+  if (tabId === "tab-bank") {
+    renderTable();
+  } else if (tabId === "tab-oob") {
+    renderOutOfBankSection();
+  } else if (tabId === "tab-stress") {
+    renderStressSection();
+  } else if (tabId === "tab-dashboard") {
+    renderSummaryAndOPD();
+  }
 }
 
 function openEditModal(no) {
@@ -1922,3 +2135,260 @@ bindEvents();
 loadInitialState();
 connectSSE();
 setInterval(updateLiveCountdownTick, 120);
+
+/* ===================== Account & Admin Management ===================== */
+async function loadCurrentUser() {
+  try {
+    const user = await api("/api/auth/me");
+    state.currentUser = user;
+    el("userBadgeName").textContent = user.fullName || user.username;
+    el("userBadgeRole").textContent = user.role;
+    el("userModalName").textContent = user.fullName || user.username;
+    el("userModalUsername").textContent = `@${user.username} • ${user.role}`;
+    if (user.role === "admin") {
+      el("adminUsersSection").classList.remove("hidden");
+      loadAdminUsers();
+    } else {
+      el("adminUsersSection").classList.add("hidden");
+    }
+  } catch (err) {
+    if (err.message.includes("401")) {
+      window.location.href = "/login.html";
+    }
+  }
+}
+
+async function loadAdminUsers() {
+  const tbody = el("adminUsersBody");
+  if (!tbody) return;
+  try {
+    const res = await api("/api/admin/users");
+    const users = res.users || [];
+    tbody.innerHTML = users
+      .map(
+        (u) => `<tr>
+          <td><strong>${escapeHTML(u.username)}</strong></td>
+          <td>${escapeHTML(u.fullName || "-")}</td>
+          <td class="num"><span class="badge badge-outline">${escapeHTML(u.role)}</span></td>
+        </tr>`
+      )
+      .join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="3" class="empty-cell">Gagal memuat pengguna: ${escapeHTML(err.message)}</td></tr>`;
+  }
+}
+
+function bindAccountEvents() {
+  el("btnUserModal").addEventListener("click", () => el("userModal").classList.remove("hidden"));
+  el("btnCloseUserModal").addEventListener("click", () => el("userModal").classList.add("hidden"));
+
+  el("btnLogout").addEventListener("click", async () => {
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login.html";
+    }
+  });
+
+  const limitBtn = el("btnSetWaLimit");
+  if (limitBtn) {
+    limitBtn.addEventListener("click", async () => {
+      const username = el("waLimitUser").value.trim();
+      const limit = Number(el("waLimitValue").value) || 3;
+      if (!username) {
+        toast("Masukkan username terlebih dahulu.", true);
+        return;
+      }
+      try {
+        const list = await api("/api/admin/users");
+        const target = (list.users || []).find((u) => u.username === username);
+        if (!target) {
+          toast("Username tidak ditemukan.", true);
+          return;
+        }
+        await api("/api/admin/wa-limit", { method: "POST", body: { userId: target.id, limit } });
+        toast(`Batas WA ${username} diset menjadi ${limit}.`);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }
+
+  const form = el("formCreateUser");
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        username: el("newUsername").value.trim(),
+        password: el("newPassword").value,
+        fullName: el("newFullName").value.trim(),
+        role: el("newRole").value,
+      };
+      try {
+        await api("/api/admin/users", { method: "POST", body: payload });
+        toast(`Akun ${payload.username} berhasil dibuat.`);
+        form.reset();
+        loadAdminUsers();
+      } catch (err) {
+        toast(`Gagal membuat akun: ${err.message}`, true);
+      }
+    });
+  }
+}
+
+
+/* ===================== Multi-device WhatsApp manager ===================== */
+function channelClass(index) {
+  return `channel-${(index % 4) + 1}`;
+}
+
+function renderDeviceList() {
+  const box = el("deviceList");
+  if (!box) return;
+  const devices = state.devices || [];
+  if (devices.length === 0) {
+    box.innerHTML = `<div class="empty-cell">Belum ada nomor WA. Tambahkan nomor terlebih dahulu.</div>`;
+    el("btnTriggerQR").disabled = true;
+    el("waLogoutControls").classList.add("hidden");
+    return;
+  }
+
+  box.innerHTML = devices
+    .map((d, i) => {
+      const st = state.deviceStatuses[d.deviceUuid] || {};
+      const online = st.loggedIn && st.connected;
+      const dot = online ? "online" : st.loggedIn ? "connecting" : "offline";
+      const statusText = online ? "Terhubung" : st.loggedIn ? "Sesi tersimpan" : "Belum tertaut";
+      const selected = state.selectedDeviceUuid === d.deviceUuid ? " selected" : "";
+      return `
+        <div class="device-item${selected}" data-uuid="${escapeHTML(d.deviceUuid)}">
+          <div class="device-main">
+            <span class="device-name"><span class="status-dot ${dot}" style="margin-right:6px"></span>${escapeHTML(d.deviceName)}</span>
+            <span class="device-phone">${escapeHTML(d.phoneNumber)} • ${escapeHTML(statusText)}</span>
+          </div>
+          <div class="device-actions">
+            <button type="button" class="btn btn-outline btn-xs" data-device-action="select" data-uuid="${escapeHTML(d.deviceUuid)}">Pilih</button>
+            <button type="button" class="btn btn-danger-outline btn-xs" data-device-action="delete" data-uuid="${escapeHTML(d.deviceUuid)}">Hapus</button>
+          </div>
+        </div>`;
+    })
+    .join("");
+
+  const hasSelection = devices.some((d) => d.deviceUuid === state.selectedDeviceUuid);
+  el("btnTriggerQR").disabled = !hasSelection;
+  el("waLogoutControls").classList.toggle("hidden", !hasSelection);
+}
+
+async function loadDevices() {
+  try {
+    const res = await api("/api/wa/devices");
+    state.devices = res.devices || [];
+    state.deviceStatuses = res.statuses || {};
+    if (!state.selectedDeviceUuid && state.devices.length > 0) {
+      state.selectedDeviceUuid = state.devices[0].deviceUuid;
+    }
+    renderDeviceList();
+    renderWAStatus();
+  } catch (err) {
+    /* keep UI quiet; the WA badge already reflects auth problems */
+  }
+}
+
+function bindDeviceEvents() {
+  const modal = el("waModal");
+  if (!modal) return;
+
+  el("btnWaModal").addEventListener("click", () => {
+    el("waModal").classList.remove("hidden");
+    loadDevices();
+  });
+  el("btnCloseWaModal").addEventListener("click", () => el("waModal").classList.add("hidden"));
+
+  el("deviceList").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-device-action]");
+    const card = e.target.closest(".device-item");
+    if (card) {
+      state.selectedDeviceUuid = card.dataset.uuid;
+      renderDeviceList();
+    }
+    if (!btn) return;
+    const uuid = btn.dataset.uuid;
+    if (btn.dataset.deviceAction === "delete") {
+      if (!confirm("Hapus perangkat WA ini? Sesi login perangkat akan diputuskan.")) return;
+      try {
+        await api(`/api/wa/devices/${encodeURIComponent(uuid)}`, { method: "DELETE" });
+        if (state.selectedDeviceUuid === uuid) state.selectedDeviceUuid = "";
+        toast("Perangkat dihapus.");
+        loadDevices();
+      } catch (err) {
+        toast(err.message, true);
+      }
+    }
+  });
+
+  el("formAddDevice").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payload = {
+      deviceName: el("newDeviceName").value.trim(),
+      phone: el("newDevicePhone").value.trim(),
+    };
+    try {
+      const res = await api("/api/wa/devices", { method: "POST", body: payload });
+      state.selectedDeviceUuid = res.device?.deviceUuid || state.selectedDeviceUuid;
+      el("newDeviceName").value = "";
+      el("newDevicePhone").value = "";
+      toast("Nomor WA ditambahkan.");
+      loadDevices();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  el("btnTriggerQR").addEventListener("click", async () => {
+    if (!state.selectedDeviceUuid) {
+      toast("Pilih perangkat terlebih dahulu.", true);
+      return;
+    }
+    try {
+      await api("/api/wa/connect", { method: "POST", body: { deviceUuid: state.selectedDeviceUuid } });
+      toast("Menghubungkan perangkat...");
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  el("btnRequestPairing").addEventListener("click", async () => {
+    const phone = el("inputPairingPhone").value.trim();
+    if (!state.selectedDeviceUuid) {
+      toast("Pilih perangkat terlebih dahulu.", true);
+      return;
+    }
+    try {
+      const res = await api("/api/wa/pair", {
+        method: "POST",
+        body: { phone, deviceUuid: state.selectedDeviceUuid },
+      });
+      toast(`Kode Pairing: ${res.pairingCode}`);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  el("btnLogoutWA").addEventListener("click", async () => {
+    if (!state.selectedDeviceUuid) return;
+    if (!confirm("Putuskan sesi login perangkat terpilih?")) return;
+    try {
+      await api("/api/wa/logout", { method: "POST", body: { deviceUuid: state.selectedDeviceUuid } });
+      toast("Sesi perangkat diputuskan.");
+      loadDevices();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+bindDeviceEvents();
+loadDevices();
+
+bindAccountEvents();
+loadCurrentUser();

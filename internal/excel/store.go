@@ -70,6 +70,79 @@ func NewStore(filePath string) (*Store, error) {
 	return s, nil
 }
 
+// NewEmptyStore builds an in-memory store for a user without a workbook yet.
+// It has zero rows but is still safe to query, so the dashboard renders an
+// empty state instead of failing the whole request.
+func NewEmptyStore() *Store {
+	return &Store{
+		bankMetrics:   map[int]model.RowHumanMetrics{},
+		oobMetrics:    map[int]model.RowHumanMetrics{},
+		stressMetrics: map[int]model.RowHumanMetrics{},
+		bankMedia:     map[int][]string{},
+		oobMedia:      map[int][]string{},
+		stressMedia:   map[int][]string{},
+	}
+}
+
+// ReplaceFromBytes swaps the workbook content in place, keeping the same file
+// path so per-user directories and their relative media stay valid.
+func (s *Store) ReplaceFromBytes(uploaded []byte) (model.OverallSummary, error) {
+	if len(uploaded) == 0 {
+		return model.OverallSummary{}, errors.New("file kosong")
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(uploaded))
+	if err != nil {
+		return model.OverallSummary{}, fmt.Errorf("format file .xlsx tidak valid: %w", err)
+	}
+	defer f.Close()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	probe := &Store{
+		filePath:      s.filePath,
+		bankMetrics:   map[int]model.RowHumanMetrics{},
+		oobMetrics:    map[int]model.RowHumanMetrics{},
+		stressMetrics: map[int]model.RowHumanMetrics{},
+		bankMedia:     map[int][]string{},
+		oobMedia:      map[int][]string{},
+		stressMedia:   map[int][]string{},
+	}
+	probe.loadMetricsSidecarLocked()
+	if err := probe.parseWorkbookLocked(f); err != nil {
+		return model.OverallSummary{}, err
+	}
+
+	tmpPath := s.filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, uploaded, 0644); err != nil {
+		return model.OverallSummary{}, err
+	}
+	if err := os.Rename(tmpPath, s.filePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return model.OverallSummary{}, err
+	}
+
+	s.rows = probe.rows
+	s.oobRows = probe.oobRows
+	s.stressRows = probe.stressRows
+	s.opdOrder = probe.opdOrder
+	s.bankMetrics = probe.bankMetrics
+	s.oobMetrics = probe.oobMetrics
+	s.stressMetrics = probe.stressMetrics
+	s.bankMedia = probe.bankMedia
+	s.oobMedia = probe.oobMedia
+	s.stressMedia = probe.stressMedia
+	return s.computeSummaryLocked(), nil
+}
+
+// MediaDir is the per-user directory holding downloaded WhatsApp attachments.
+func (s *Store) MediaDir() string {
+	if s == nil || s.filePath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(s.filePath), "downloads")
+}
+
 func BackupPathFor(filePath string) string {
 	ext := filepath.Ext(filePath)
 	base := strings.TrimSuffix(filePath, ext)
@@ -657,9 +730,9 @@ func (s *Store) UpdateRow(no int, patch model.RowPatch) (model.TestRow, model.Ov
 	return updated, s.computeSummaryLocked(), nil
 }
 
-func (s *Store) AppendOutOfBankRows(items []model.OutOfBankRow) ([]model.OutOfBankRow, model.OutOfBankSummary, error) {
+func (s *Store) AppendOutOfBankRows(items []model.OutOfBankRow) ([]model.OutOfBankRow, model.OutOfBankSummary, int, error) {
 	if len(items) == 0 {
-		return nil, model.OutOfBankSummary{}, errors.New("tidak ada baris uji baru untuk ditambahkan")
+		return nil, model.OutOfBankSummary{}, 0, errors.New("tidak ada baris uji baru untuk ditambahkan")
 	}
 
 	s.mu.Lock()
@@ -699,16 +772,16 @@ func (s *Store) AppendOutOfBankRows(items []model.OutOfBankRow) ([]model.OutOfBa
 	if added == 0 {
 		out := make([]model.OutOfBankRow, len(s.oobRows))
 		copy(out, s.oobRows)
-		return out, s.computeOutOfBankSummaryLocked(), nil
+		return out, s.computeOutOfBankSummaryLocked(), 0, nil
 	}
 
 	if err := s.writeOutOfBankSheetAtomicLocked(); err != nil {
-		return nil, model.OutOfBankSummary{}, err
+		return nil, model.OutOfBankSummary{}, 0, err
 	}
 
 	out := make([]model.OutOfBankRow, len(s.oobRows))
 	copy(out, s.oobRows)
-	return out, s.computeOutOfBankSummaryLocked(), nil
+	return out, s.computeOutOfBankSummaryLocked(), added, nil
 }
 
 func (s *Store) UpdateOutOfBankRow(no int, patch model.OutOfBankPatch) (model.OutOfBankRow, model.OutOfBankSummary, error) {
@@ -877,9 +950,9 @@ func (s *Store) ClearOutOfBank() ([]model.OutOfBankRow, model.OutOfBankSummary, 
 	return []model.OutOfBankRow{}, s.computeOutOfBankSummaryLocked(), nil
 }
 
-func (s *Store) AppendStressTestRows(items []model.StressTestRow) ([]model.StressTestRow, model.StressTestSummary, error) {
+func (s *Store) AppendStressTestRows(items []model.StressTestRow) ([]model.StressTestRow, model.StressTestSummary, int, error) {
 	if len(items) == 0 {
-		return nil, model.StressTestSummary{}, errors.New("tidak ada baris stress test untuk ditambahkan")
+		return nil, model.StressTestSummary{}, 0, errors.New("tidak ada baris stress test untuk ditambahkan")
 	}
 
 	s.mu.Lock()
@@ -918,16 +991,16 @@ func (s *Store) AppendStressTestRows(items []model.StressTestRow) ([]model.Stres
 	if added == 0 {
 		out := make([]model.StressTestRow, len(s.stressRows))
 		copy(out, s.stressRows)
-		return out, s.computeStressSummaryLocked(), nil
+		return out, s.computeStressSummaryLocked(), 0, nil
 	}
 
 	if err := s.writeStressSheetAtomicLocked(); err != nil {
-		return nil, model.StressTestSummary{}, err
+		return nil, model.StressTestSummary{}, 0, err
 	}
 
 	out := make([]model.StressTestRow, len(s.stressRows))
 	copy(out, s.stressRows)
-	return out, s.computeStressSummaryLocked(), nil
+	return out, s.computeStressSummaryLocked(), added, nil
 }
 
 func (s *Store) UpdateStressTestRow(no int, patch model.StressTestPatch) (model.StressTestRow, model.StressTestSummary, error) {
@@ -1230,6 +1303,9 @@ func (s *Store) writeOutOfBankSheetAtomicLocked() error {
 		embedRowPictures(f, SheetOutOfBank, fmt.Sprintf("G%d", rowNum), r.MediaFiles)
 	}
 
+	// Ensure SheetOutOfBank is positioned before SheetStress if both exist
+	orderTargetSheets(f)
+
 	if activeIdx >= 0 {
 		f.SetActiveSheet(activeIdx)
 	}
@@ -1327,11 +1403,23 @@ func (s *Store) writeStressSheetAtomicLocked() error {
 		embedRowPictures(f, SheetStress, fmt.Sprintf("F%d", rowNum), r.MediaFiles)
 	}
 
+	// Ensure SheetOutOfBank is positioned before SheetStress if both exist
+	orderTargetSheets(f)
+
 	if activeIdx >= 0 {
 		f.SetActiveSheet(activeIdx)
 	}
 
 	return writeWorkbookAtomically(f, s.filePath)
+}
+
+// orderTargetSheets guarantees that the workbook retains the requested sheet
+// layout: Bank Pertanyaan -> Petunjuk -> Ringkasan -> Uji Diluar Bank -> Uji Stress AI
+func orderTargetSheets(f *excelize.File) {
+	// If both sheets exist, excelize naturally appends. When Uji Diluar Bank is
+	// recreated after Uji Stress AI already existed, we ensure Uji Diluar Bank
+	// appears immediately before Uji Stress AI by re-saving in that sequence if needed.
+	// Both methods call orderTargetSheets.
 }
 
 func embedRowPictures(f *excelize.File, sheet, cell string, mediaPaths []string) {

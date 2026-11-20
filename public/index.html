@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WA Bot QA Workbench — Kominfo Medan</title>
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/auth.css" />
 </head>
 <body>
   <header class="topbar">
@@ -17,6 +18,11 @@
     </div>
 
     <div class="topbar-actions">
+      <button id="btnUserModal" class="user-badge" type="button" title="Kelola akun & login">
+        <span id="userBadgeName">Memuat...</span>
+        <span id="userBadgeRole" class="user-role"></span>
+      </button>
+
       <button id="btnWaModal" class="btn btn-outline status-btn" type="button">
         <span id="waDot" class="status-dot offline"></span>
         <span id="waLabel">WA Penguji: Belum Terhubung</span>
@@ -93,7 +99,10 @@
         <div id="humanPhaseBar" class="phase-progress-fill" style="width: 0%"></div>
       </div>
 
-      <div class="telemetry-metrics-grid">
+      <!-- Multi-Channel Cards Grid (expands dynamically when 2+ WAs connected) -->
+      <div id="multiChannelGrid" class="multi-channel-grid hidden"></div>
+
+      <div id="singleTelemetryGrid" class="telemetry-metrics-grid">
         <div class="metric-mini">
           <span class="metric-mini-label">Fokus Pre-Think</span>
           <strong id="tmPreThinkInfo">0.0 dtk</strong>
@@ -222,12 +231,14 @@
               <th class="col-a">Balasan Sesuai Data (Bank)</th>
               <th class="col-a">Balasan Dikirim Sistem (WA)</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
+              <th class="col-device">WA Pengirim</th>
+              <th class="col-device">WA Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
           <tbody id="qaTableBody">
             <tr>
-              <td colspan="7" class="empty-cell">Memuat data bank pertanyaan...</td>
+              <td colspan="9" class="empty-cell">Memuat data bank pertanyaan...</td>
             </tr>
           </tbody>
         </table>
@@ -313,12 +324,14 @@
               <th class="col-a">Perilaku Bot yang Diharapkan</th>
               <th class="col-a">Balasan Dikirim Sistem</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
+              <th class="col-device">WA Pengirim</th>
+              <th class="col-device">WA Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
           <tbody id="oobTableBody">
             <tr>
-              <td colspan="8" class="empty-cell">Belum ada baris uji diluar bank. Klik tombol "+ Generate Variasi Tahun 2026 dari Bank" di atas untuk membuat otomatis.</td>
+              <td colspan="10" class="empty-cell">Belum ada baris uji diluar bank. Klik tombol "+ Generate Variasi Tahun 2026 dari Bank" di atas untuk membuat otomatis.</td>
             </tr>
           </tbody>
         </table>
@@ -404,12 +417,14 @@
               <th class="col-a">Perilaku Bot yang Diharapkan</th>
               <th class="col-a">Balasan Dikirim Sistem</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
+              <th class="col-device">WA Pengirim</th>
+              <th class="col-device">WA Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
           <tbody id="stressTableBody">
             <tr>
-              <td colspan="8" class="empty-cell">Belum ada baris uji stress AI. Klik tombol "🎭 Generate Skenario Curhat &amp; Stress Test" di atas untuk membuat otomatis.</td>
+              <td colspan="10" class="empty-cell">Belum ada baris uji stress AI. Klik tombol "🎭 Generate Skenario Curhat &amp; Stress Test" di atas untuk membuat otomatis.</td>
             </tr>
           </tbody>
         </table>
@@ -732,36 +747,44 @@
 
   <!-- WhatsApp Connection Modal -->
   <div id="waModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-    <div class="modal-card">
+    <div class="modal-card modal-wide">
       <div class="modal-header">
-        <h3>Koneksi WhatsApp Penguji</h3>
+        <h3>Perangkat WhatsApp Penguji</h3>
         <button id="btnCloseWaModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
       </div>
 
       <div class="modal-body">
         <div id="waModalStatusBox" class="wa-status-box"></div>
 
-        <div id="waLoginControls">
-          <div class="wa-connect-actions">
-            <button id="btnTriggerQR" class="btn btn-primary" type="button">Tampilkan QR Code</button>
-          </div>
-
-          <div id="qrContainer" class="qr-box hidden">
-            <img id="qrImage" alt="QR Code WhatsApp" />
-            <p class="muted">Buka WhatsApp di HP penguji &rarr; <strong>Perangkat Tertaut</strong> &rarr; <strong>Tautkan Perangkat</strong>.</p>
-          </div>
-
-          <div class="divider-text">atau tautkan dengan kode 8-digit</div>
-
-          <div class="pairing-row">
-            <input id="inputPairingPhone" type="text" placeholder="Nomor HP Penguji (628xxx)" />
-            <button id="btnRequestPairing" class="btn btn-secondary" type="button">Minta Kode Pairing</button>
-          </div>
-          <div id="pairingCodeBox" class="pairing-code-display hidden"></div>
+        <div id="deviceList" class="device-list">
+          <div class="empty-cell">Memuat perangkat...</div>
         </div>
 
+        <form id="formAddDevice" class="device-add-row">
+          <input id="newDeviceName" type="text" placeholder="Nama perangkat (contoh: WA Tester 1)" />
+          <input id="newDevicePhone" type="text" placeholder="Nomor WA (628xxx)" required />
+          <button id="btnAddDevice" type="submit" class="btn btn-secondary">+ Tambah Nomor</button>
+        </form>
+
+        <div class="divider-text">tautkan perangkat terpilih</div>
+
+        <div class="wa-connect-actions">
+          <button id="btnTriggerQR" class="btn btn-primary" type="button" disabled>Tampilkan QR Code</button>
+        </div>
+
+        <div id="qrContainer" class="qr-box hidden">
+          <img id="qrImage" alt="QR Code WhatsApp" />
+          <p class="muted">Buka WhatsApp di HP penguji &rarr; <strong>Perangkat Tertaut</strong> &rarr; <strong>Tautkan Perangkat</strong>.</p>
+        </div>
+
+        <div class="pairing-row">
+          <input id="inputPairingPhone" type="text" placeholder="Nomor HP Penguji (628xxx)" />
+          <button id="btnRequestPairing" class="btn btn-secondary" type="button">Minta Kode Pairing</button>
+        </div>
+        <div id="pairingCodeBox" class="pairing-code-display hidden"></div>
+
         <div id="waLogoutControls" class="hidden">
-          <button id="btnLogoutWA" class="btn btn-danger-outline" type="button">Putuskan &amp; Logout Sesi WA</button>
+          <button id="btnLogoutWA" class="btn btn-danger-outline" type="button">Putuskan Perangkat Terpilih</button>
         </div>
       </div>
     </div>
@@ -1068,6 +1091,83 @@
           <button type="submit" class="btn btn-primary" style="background:#5b21b6; border-color:#4c1d95">Simpan ke Sheet Uji Stress AI</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- User Account & Admin Management Modal -->
+  <div id="userModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-medium">
+      <div class="modal-header">
+        <h3>Akun &amp; Manajemen Pengguna</h3>
+        <button id="btnCloseUserModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="user-session-box">
+          <div>
+            <strong id="userModalName">-</strong>
+            <div class="muted" id="userModalUsername">-</div>
+          </div>
+          <button id="btnLogout" class="btn btn-danger-outline btn-sm" type="button">Logout</button>
+        </div>
+
+        <div id="adminUsersSection" class="hidden">
+          <div class="section-header-row">
+            <div>
+              <h4 style="margin:0 0 4px">Daftar Akun Pengguna</h4>
+              <p class="muted">Hanya admin yang dapat membuat akun programmer penguji baru.</p>
+            </div>
+          </div>
+
+          <div class="table-wrapper" style="border:1px solid var(--border); border-radius:6px; margin-bottom:12px">
+            <table class="opd-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Nama Lengkap</th>
+                  <th class="num">Role</th>
+                </tr>
+              </thead>
+              <tbody id="adminUsersBody">
+                <tr><td colspan="3" class="empty-cell">Memuat daftar pengguna...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="admin-wa-limit">
+            <label class="checkbox-label" style="gap:10px">
+              <span>Batas nomor WA akun:</span>
+              <input id="waLimitUser" type="text" placeholder="username" style="max-width:140px" />
+              <input id="waLimitValue" type="number" min="1" max="20" value="3" style="max-width:80px" />
+              <button id="btnSetWaLimit" class="btn btn-outline btn-xs" type="button">Terapkan</button>
+            </label>
+          </div>
+
+          <form id="formCreateUser" class="settings-form-grid">
+            <div class="field-group">
+              <label for="newUsername">Username Baru</label>
+              <input id="newUsername" type="text" placeholder="contoh: prog1" required minlength="3" />
+            </div>
+            <div class="field-group">
+              <label for="newPassword">Password Baru</label>
+              <input id="newPassword" type="password" placeholder="minimal 5 karakter" required minlength="5" />
+            </div>
+            <div class="field-group">
+              <label for="newFullName">Nama Lengkap</label>
+              <input id="newFullName" type="text" placeholder="contoh: Programmer 1" />
+            </div>
+            <div class="field-group">
+              <label for="newRole">Role</label>
+              <select id="newRole">
+                <option value="tester">tester</option>
+                <option value="admin">admin</option>
+              </select>
+            </div>
+            <div class="settings-submit-row">
+              <button id="btnCreateUser" type="submit" class="btn btn-primary">+ Buat Akun Pengguna</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 

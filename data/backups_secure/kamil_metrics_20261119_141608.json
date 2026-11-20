@@ -1,0 +1,3470 @@
+{
+  "bank": {
+    "1": {
+      "preThinkMs": 2890,
+      "typingMs": 5004,
+      "typingChars": 64,
+      "typingBursts": 1,
+      "botReplyWaitMs": 8671,
+      "botBubbles": 1,
+      "unreadDelayMs": 3829,
+      "readDurationMs": 4812,
+      "queueDelayMs": 0,
+      "testedAt": 1795011432807
+    },
+    "10": {
+      "preThinkMs": 2564,
+      "typingMs": 3996,
+      "typingChars": 54,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11925,
+      "botBubbles": 1,
+      "unreadDelayMs": 7229,
+      "readDurationMs": 6000,
+      "queueDelayMs": 43325,
+      "breakKind": "spike",
+      "testedAt": 1794992356093
+    },
+    "100": {
+      "preThinkMs": 4616,
+      "typingMs": 7588,
+      "typingChars": 106,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10669,
+      "botBubbles": 1,
+      "unreadDelayMs": 3079,
+      "readDurationMs": 5833,
+      "queueDelayMs": 35730,
+      "breakKind": "spike",
+      "testedAt": 1794998531505
+    },
+    "101": {
+      "preThinkMs": 2534,
+      "typingMs": 4944,
+      "typingChars": 67,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12134,
+      "botBubbles": 1,
+      "unreadDelayMs": 5474,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8602,
+      "breakKind": "normal",
+      "testedAt": 1794998572241
+    },
+    "102": {
+      "preThinkMs": 4656,
+      "typingMs": 9000,
+      "typingChars": 165,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13342,
+      "botBubbles": 1,
+      "unreadDelayMs": 6618,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15169,
+      "breakKind": "normal",
+      "testedAt": 1794998628094
+    },
+    "103": {
+      "preThinkMs": 3374,
+      "typingMs": 4754,
+      "typingChars": 96,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10371,
+      "botBubbles": 1,
+      "unreadDelayMs": 3595,
+      "readDurationMs": 4740,
+      "queueDelayMs": 14207,
+      "breakKind": "normal",
+      "testedAt": 1794998670224
+    },
+    "104": {
+      "preThinkMs": 2715,
+      "typingMs": 6877,
+      "typingChars": 90,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18609,
+      "botBubbles": 2,
+      "unreadDelayMs": 3468,
+      "readDurationMs": 6000,
+      "queueDelayMs": 36173,
+      "breakKind": "spike",
+      "testedAt": 1794998745183
+    },
+    "105": {
+      "preThinkMs": 4307,
+      "typingMs": 6814,
+      "typingChars": 117,
+      "typingBursts": 2,
+      "botReplyWaitMs": 17526,
+      "botBubbles": 3,
+      "unreadDelayMs": 9995,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795005935331
+    },
+    "106": {
+      "preThinkMs": 3494,
+      "typingMs": 5449,
+      "typingChars": 85,
+      "typingBursts": 1,
+      "botReplyWaitMs": 16109,
+      "botBubbles": 3,
+      "unreadDelayMs": 4280,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795006000215
+    },
+    "107": {
+      "preThinkMs": 2170,
+      "typingMs": 9000,
+      "typingChars": 148,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18035,
+      "botBubbles": 2,
+      "unreadDelayMs": 3894,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795006166864
+    },
+    "108": {
+      "preThinkMs": 4058,
+      "typingMs": 5589,
+      "typingChars": 73,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14765,
+      "botBubbles": 3,
+      "unreadDelayMs": 4864,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795006216781
+    },
+    "109": {
+      "preThinkMs": 2999,
+      "typingMs": 8759,
+      "typingChars": 139,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16312,
+      "botBubbles": 2,
+      "unreadDelayMs": 4670,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795014662576
+    },
+    "11": {
+      "preThinkMs": 4018,
+      "typingMs": 8113,
+      "typingChars": 128,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10286,
+      "botBubbles": 1,
+      "unreadDelayMs": 6256,
+      "readDurationMs": 5000,
+      "queueDelayMs": 0,
+      "testedAt": 1794992497536
+    },
+    "110": {
+      "preThinkMs": 2147,
+      "typingMs": 8127,
+      "typingChars": 117,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14374,
+      "botBubbles": 2,
+      "unreadDelayMs": 5665,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13201,
+      "breakKind": "normal",
+      "testedAt": 1795014715065
+    },
+    "111": {
+      "preThinkMs": 2044,
+      "typingMs": 7430,
+      "typingChars": 80,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13053,
+      "botBubbles": 1,
+      "unreadDelayMs": 5321,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11031,
+      "breakKind": "normal",
+      "testedAt": 1795014761635
+    },
+    "112": {
+      "preThinkMs": 3159,
+      "typingMs": 5990,
+      "typingChars": 96,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12184,
+      "botBubbles": 1,
+      "unreadDelayMs": 4961,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10487,
+      "breakKind": "normal",
+      "testedAt": 1795014805956
+    },
+    "113": {
+      "preThinkMs": 2340,
+      "typingMs": 3589,
+      "typingChars": 58,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11613,
+      "botBubbles": 1,
+      "unreadDelayMs": 4236,
+      "readDurationMs": 6000,
+      "queueDelayMs": 49437,
+      "breakKind": "spike",
+      "testedAt": 1795014884807
+    },
+    "114": {
+      "preThinkMs": 3697,
+      "typingMs": 3408,
+      "typingChars": 48,
+      "typingBursts": 1,
+      "botReplyWaitMs": 21246,
+      "botBubbles": 2,
+      "unreadDelayMs": 4876,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56533,
+      "breakKind": "spike",
+      "testedAt": 1795014982553
+    },
+    "115": {
+      "preThinkMs": 3158,
+      "typingMs": 8917,
+      "typingChars": 146,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14921,
+      "botBubbles": 2,
+      "unreadDelayMs": 6915,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9341,
+      "breakKind": "normal",
+      "testedAt": 1795015033383
+    },
+    "116": {
+      "preThinkMs": 3280,
+      "typingMs": 6675,
+      "typingChars": 89,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15654,
+      "botBubbles": 3,
+      "unreadDelayMs": 3601,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15761,
+      "breakKind": "normal",
+      "testedAt": 1795015086144
+    },
+    "117": {
+      "preThinkMs": 4213,
+      "typingMs": 3227,
+      "typingChars": 46,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15304,
+      "botBubbles": 3,
+      "unreadDelayMs": 6837,
+      "readDurationMs": 6000,
+      "queueDelayMs": 42300,
+      "breakKind": "spike",
+      "testedAt": 1795015165676
+    },
+    "118": {
+      "preThinkMs": 2642,
+      "typingMs": 6670,
+      "typingChars": 75,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12662,
+      "botBubbles": 1,
+      "unreadDelayMs": 6685,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13504,
+      "breakKind": "normal",
+      "testedAt": 1795015215449
+    },
+    "119": {
+      "preThinkMs": 4602,
+      "typingMs": 9000,
+      "typingChars": 175,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18723,
+      "botBubbles": 2,
+      "unreadDelayMs": 2767,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8431,
+      "breakKind": "normal",
+      "testedAt": 1795015266593
+    },
+    "12": {
+      "preThinkMs": 2305,
+      "typingMs": 7667,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14430,
+      "botBubbles": 2,
+      "unreadDelayMs": 4192,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10737,
+      "breakKind": "normal",
+      "testedAt": 1794992543375
+    },
+    "120": {
+      "preThinkMs": 3647,
+      "typingMs": 7125,
+      "typingChars": 112,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15014,
+      "botBubbles": 3,
+      "unreadDelayMs": 6062,
+      "readDurationMs": 6000,
+      "queueDelayMs": 48203,
+      "breakKind": "spike",
+      "testedAt": 1795015354535
+    },
+    "121": {
+      "preThinkMs": 3244,
+      "typingMs": 5230,
+      "typingChars": 86,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15089,
+      "botBubbles": 2,
+      "unreadDelayMs": 4568,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11250,
+      "breakKind": "normal",
+      "testedAt": 1795015401624
+    },
+    "122": {
+      "preThinkMs": 4756,
+      "typingMs": 8311,
+      "typingChars": 110,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14815,
+      "botBubbles": 2,
+      "unreadDelayMs": 6863,
+      "readDurationMs": 6000,
+      "queueDelayMs": 49621,
+      "breakKind": "spike",
+      "testedAt": 1795015493821
+    },
+    "123": {
+      "preThinkMs": 2321,
+      "typingMs": 5632,
+      "typingChars": 65,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11439,
+      "botBubbles": 1,
+      "unreadDelayMs": 3560,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9598,
+      "breakKind": "normal",
+      "testedAt": 1795015534266
+    },
+    "124": {
+      "preThinkMs": 4167,
+      "typingMs": 4034,
+      "typingChars": 53,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12609,
+      "botBubbles": 1,
+      "unreadDelayMs": 6491,
+      "readDurationMs": 6000,
+      "queueDelayMs": 59275,
+      "breakKind": "spike",
+      "testedAt": 1795015628779
+    },
+    "125": {
+      "preThinkMs": 2732,
+      "typingMs": 3069,
+      "typingChars": 43,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12667,
+      "botBubbles": 1,
+      "unreadDelayMs": 3819,
+      "readDurationMs": 6000,
+      "queueDelayMs": 57873,
+      "breakKind": "spike",
+      "testedAt": 1795015716669
+    },
+    "126": {
+      "preThinkMs": 2550,
+      "typingMs": 5261,
+      "typingChars": 73,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12789,
+      "botBubbles": 1,
+      "unreadDelayMs": 3720,
+      "readDurationMs": 6000,
+      "queueDelayMs": 84863,
+      "breakKind": "micro_break",
+      "testedAt": 1795015833549
+    },
+    "127": {
+      "preThinkMs": 4734,
+      "typingMs": 5195,
+      "typingChars": 83,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14744,
+      "botBubbles": 2,
+      "unreadDelayMs": 2688,
+      "readDurationMs": 6000,
+      "queueDelayMs": 39696,
+      "breakKind": "spike",
+      "testedAt": 1795015908539
+    },
+    "128": {
+      "preThinkMs": 3999,
+      "typingMs": 4991,
+      "typingChars": 72,
+      "typingBursts": 1,
+      "botReplyWaitMs": 13396,
+      "botBubbles": 1,
+      "unreadDelayMs": 9683,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15630,
+      "breakKind": "normal",
+      "testedAt": 1795015964967
+    },
+    "129": {
+      "preThinkMs": 3838,
+      "typingMs": 8187,
+      "typingChars": 120,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11754,
+      "botBubbles": 2,
+      "unreadDelayMs": 6887,
+      "readDurationMs": 6000,
+      "queueDelayMs": 49814,
+      "breakKind": "spike",
+      "testedAt": 1795016053344
+    },
+    "13": {
+      "preThinkMs": 4407,
+      "typingMs": 3716,
+      "typingChars": 45,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12025,
+      "botBubbles": 1,
+      "unreadDelayMs": 7251,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9198,
+      "breakKind": "normal",
+      "testedAt": 1794992586431
+    },
+    "130": {
+      "preThinkMs": 4061,
+      "typingMs": 6461,
+      "typingChars": 89,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12574,
+      "botBubbles": 1,
+      "unreadDelayMs": 6757,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11797,
+      "breakKind": "normal",
+      "testedAt": 1795016102835
+    },
+    "131": {
+      "preThinkMs": 3678,
+      "typingMs": 9000,
+      "typingChars": 257,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10476,
+      "botBubbles": 1,
+      "unreadDelayMs": 7494,
+      "readDurationMs": 4793,
+      "queueDelayMs": 14277,
+      "breakKind": "normal",
+      "testedAt": 1795016154442
+    },
+    "132": {
+      "preThinkMs": 3371,
+      "typingMs": 6586,
+      "typingChars": 87,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15175,
+      "botBubbles": 2,
+      "unreadDelayMs": 6783,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9255,
+      "breakKind": "normal",
+      "testedAt": 1795016203331
+    },
+    "133": {
+      "preThinkMs": 4766,
+      "typingMs": 6361,
+      "typingChars": 126,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14745,
+      "botBubbles": 2,
+      "unreadDelayMs": 7099,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10059,
+      "breakKind": "normal",
+      "testedAt": 1795016254240
+    },
+    "134": {
+      "preThinkMs": 2696,
+      "typingMs": 5794,
+      "typingChars": 107,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10813,
+      "botBubbles": 1,
+      "unreadDelayMs": 3455,
+      "readDurationMs": 4105,
+      "queueDelayMs": 12872,
+      "breakKind": "normal",
+      "testedAt": 1795016295842
+    },
+    "135": {
+      "preThinkMs": 4497,
+      "typingMs": 5457,
+      "typingChars": 70,
+      "typingBursts": 1,
+      "botReplyWaitMs": 16533,
+      "botBubbles": 3,
+      "unreadDelayMs": 4297,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9421,
+      "breakKind": "normal",
+      "testedAt": 1795016343869
+    },
+    "136": {
+      "preThinkMs": 2903,
+      "typingMs": 5309,
+      "typingChars": 67,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11329,
+      "botBubbles": 1,
+      "unreadDelayMs": 3479,
+      "readDurationMs": 5570,
+      "queueDelayMs": 10932,
+      "breakKind": "normal",
+      "testedAt": 1795016385420
+    },
+    "137": {
+      "preThinkMs": 3514,
+      "typingMs": 4924,
+      "typingChars": 87,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15939,
+      "botBubbles": 3,
+      "unreadDelayMs": 6956,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8431,
+      "breakKind": "normal",
+      "testedAt": 1795016433029
+    },
+    "138": {
+      "preThinkMs": 4918,
+      "typingMs": 4474,
+      "typingChars": 83,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14641,
+      "botBubbles": 2,
+      "unreadDelayMs": 6126,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13649,
+      "breakKind": "normal",
+      "testedAt": 1795016484827
+    },
+    "139": {
+      "preThinkMs": 4687,
+      "typingMs": 4927,
+      "typingChars": 71,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11994,
+      "botBubbles": 1,
+      "unreadDelayMs": 3655,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9940,
+      "breakKind": "normal",
+      "testedAt": 1795016527980
+    },
+    "14": {
+      "preThinkMs": 2110,
+      "typingMs": 8175,
+      "typingChars": 98,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15235,
+      "botBubbles": 2,
+      "unreadDelayMs": 3483,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14599,
+      "breakKind": "normal",
+      "testedAt": 1794992636473
+    },
+    "140": {
+      "preThinkMs": 3968,
+      "typingMs": 6483,
+      "typingChars": 104,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14973,
+      "botBubbles": 2,
+      "unreadDelayMs": 5294,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56175,
+      "breakKind": "spike",
+      "testedAt": 1795016623724
+    },
+    "141": {
+      "preThinkMs": 3318,
+      "typingMs": 5730,
+      "typingChars": 100,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15057,
+      "botBubbles": 2,
+      "unreadDelayMs": 5792,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12402,
+      "breakKind": "normal",
+      "testedAt": 1795016673895
+    },
+    "142": {
+      "preThinkMs": 4383,
+      "typingMs": 4492,
+      "typingChars": 48,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12790,
+      "botBubbles": 2,
+      "unreadDelayMs": 9501,
+      "readDurationMs": 6000,
+      "queueDelayMs": 37746,
+      "breakKind": "spike",
+      "testedAt": 1795016750914
+    },
+    "143": {
+      "preThinkMs": 2606,
+      "typingMs": 9000,
+      "typingChars": 211,
+      "typingBursts": 2,
+      "botReplyWaitMs": 25381,
+      "botBubbles": 2,
+      "unreadDelayMs": 2800,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15406,
+      "breakKind": "normal",
+      "testedAt": 1795016814264
+    },
+    "144": {
+      "preThinkMs": 3387,
+      "typingMs": 6674,
+      "typingChars": 97,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14597,
+      "botBubbles": 2,
+      "unreadDelayMs": 7406,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13134,
+      "breakKind": "normal",
+      "testedAt": 1795016867503
+    },
+    "145": {
+      "preThinkMs": 4535,
+      "typingMs": 4914,
+      "typingChars": 87,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10899,
+      "botBubbles": 1,
+      "unreadDelayMs": 7740,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8609,
+      "breakKind": "normal",
+      "testedAt": 1795016913176
+    },
+    "146": {
+      "preThinkMs": 4854,
+      "typingMs": 7804,
+      "typingChars": 142,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12929,
+      "botBubbles": 1,
+      "unreadDelayMs": 4248,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15335,
+      "breakKind": "normal",
+      "testedAt": 1795016966432
+    },
+    "147": {
+      "preThinkMs": 4082,
+      "typingMs": 6161,
+      "typingChars": 78,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18549,
+      "botBubbles": 3,
+      "unreadDelayMs": 5803,
+      "readDurationMs": 6000,
+      "queueDelayMs": 47899,
+      "breakKind": "spike",
+      "testedAt": 1795017057246
+    },
+    "148": {
+      "preThinkMs": 4195,
+      "typingMs": 6101,
+      "typingChars": 101,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13298,
+      "botBubbles": 1,
+      "unreadDelayMs": 5165,
+      "readDurationMs": 6000,
+      "queueDelayMs": 74710,
+      "breakKind": "micro_break",
+      "testedAt": 1795017168758
+    },
+    "149": {
+      "preThinkMs": 3886,
+      "typingMs": 9000,
+      "typingChars": 145,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16623,
+      "botBubbles": 3,
+      "unreadDelayMs": 7466,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13221,
+      "breakKind": "normal",
+      "testedAt": 1795017227103
+    },
+    "15": {
+      "preThinkMs": 2858,
+      "typingMs": 7373,
+      "typingChars": 117,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10690,
+      "botBubbles": 1,
+      "unreadDelayMs": 4607,
+      "readDurationMs": 5561,
+      "queueDelayMs": 11201,
+      "breakKind": "normal",
+      "testedAt": 1794992679225
+    },
+    "150": {
+      "preThinkMs": 2804,
+      "typingMs": 8384,
+      "typingChars": 165,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15685,
+      "botBubbles": 2,
+      "unreadDelayMs": 5144,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11638,
+      "breakKind": "normal",
+      "testedAt": 1795017278922
+    },
+    "151": {
+      "preThinkMs": 3731,
+      "typingMs": 3007,
+      "typingChars": 50,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12788,
+      "botBubbles": 2,
+      "unreadDelayMs": 5226,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13980,
+      "breakKind": "normal",
+      "testedAt": 1795017325778
+    },
+    "152": {
+      "preThinkMs": 3461,
+      "typingMs": 5882,
+      "typingChars": 83,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11013,
+      "botBubbles": 1,
+      "unreadDelayMs": 3722,
+      "readDurationMs": 5977,
+      "queueDelayMs": 8378,
+      "breakKind": "normal",
+      "testedAt": 1795017366465
+    },
+    "153": {
+      "preThinkMs": 4291,
+      "typingMs": 9000,
+      "typingChars": 130,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11638,
+      "botBubbles": 1,
+      "unreadDelayMs": 3859,
+      "readDurationMs": 5364,
+      "queueDelayMs": 11735,
+      "breakKind": "normal",
+      "testedAt": 1795017414487
+    },
+    "154": {
+      "preThinkMs": 3196,
+      "typingMs": 6808,
+      "typingChars": 77,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14289,
+      "botBubbles": 2,
+      "unreadDelayMs": 7026,
+      "readDurationMs": 6000,
+      "queueDelayMs": 268818,
+      "breakKind": "long_rest",
+      "testedAt": 1795017722739
+    },
+    "155": {
+      "preThinkMs": 4265,
+      "typingMs": 6807,
+      "typingChars": 77,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11341,
+      "botBubbles": 1,
+      "unreadDelayMs": 4309,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11985,
+      "breakKind": "normal",
+      "testedAt": 1795017769691
+    },
+    "156": {
+      "preThinkMs": 2757,
+      "typingMs": 8022,
+      "typingChars": 97,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16537,
+      "botBubbles": 3,
+      "unreadDelayMs": 2859,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795006488846
+    },
+    "157": {
+      "preThinkMs": 4675,
+      "typingMs": 7556,
+      "typingChars": 101,
+      "typingBursts": 2,
+      "botReplyWaitMs": 20539,
+      "botBubbles": 2,
+      "unreadDelayMs": 5944,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13454,
+      "breakKind": "normal",
+      "testedAt": 1795006548263
+    },
+    "158": {
+      "preThinkMs": 3115,
+      "typingMs": 9000,
+      "typingChars": 108,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11987,
+      "botBubbles": 1,
+      "unreadDelayMs": 5268,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15834,
+      "breakKind": "normal",
+      "testedAt": 1795006600568
+    },
+    "159": {
+      "preThinkMs": 2254,
+      "typingMs": 6154,
+      "typingChars": 98,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15639,
+      "botBubbles": 2,
+      "unreadDelayMs": 3110,
+      "readDurationMs": 6000,
+      "queueDelayMs": 55835,
+      "breakKind": "spike",
+      "testedAt": 1795006690721
+    },
+    "16": {
+      "preThinkMs": 3205,
+      "typingMs": 5041,
+      "typingChars": 84,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15698,
+      "botBubbles": 3,
+      "unreadDelayMs": 7139,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11073,
+      "breakKind": "normal",
+      "testedAt": 1794992727866
+    },
+    "160": {
+      "preThinkMs": 3625,
+      "typingMs": 4825,
+      "typingChars": 63,
+      "typingBursts": 1,
+      "botReplyWaitMs": 29531,
+      "botBubbles": 3,
+      "unreadDelayMs": 3140,
+      "readDurationMs": 6000,
+      "queueDelayMs": 42795,
+      "breakKind": "spike",
+      "testedAt": 1795006781866
+    },
+    "161": {
+      "preThinkMs": 4406,
+      "typingMs": 7477,
+      "typingChars": 88,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14022,
+      "botBubbles": 2,
+      "unreadDelayMs": 3704,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11370,
+      "breakKind": "normal",
+      "testedAt": 1795006830052
+    },
+    "162": {
+      "preThinkMs": 2049,
+      "typingMs": 5156,
+      "typingChars": 56,
+      "typingBursts": 1,
+      "botReplyWaitMs": 17319,
+      "botBubbles": 2,
+      "unreadDelayMs": 3436,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11536,
+      "breakKind": "normal",
+      "testedAt": 1795006876723
+    },
+    "163": {
+      "preThinkMs": 4755,
+      "typingMs": 6368,
+      "typingChars": 91,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15436,
+      "botBubbles": 2,
+      "unreadDelayMs": 6038,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11560,
+      "breakKind": "normal",
+      "testedAt": 1795006928638
+    },
+    "164": {
+      "preThinkMs": 2135,
+      "typingMs": 9000,
+      "typingChars": 269,
+      "typingBursts": 2,
+      "botReplyWaitMs": 19614,
+      "botBubbles": 2,
+      "unreadDelayMs": 6721,
+      "readDurationMs": 6000,
+      "queueDelayMs": 75451,
+      "breakKind": "micro_break",
+      "testedAt": 1795007048979
+    },
+    "165": {
+      "preThinkMs": 3662,
+      "typingMs": 5980,
+      "typingChars": 90,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15232,
+      "botBubbles": 2,
+      "unreadDelayMs": 5053,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11524,
+      "breakKind": "normal",
+      "testedAt": 1795007098078
+    },
+    "166": {
+      "preThinkMs": 2916,
+      "typingMs": 7353,
+      "typingChars": 95,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11811,
+      "botBubbles": 1,
+      "unreadDelayMs": 6683,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12766,
+      "breakKind": "normal",
+      "testedAt": 1795007146843
+    },
+    "167": {
+      "preThinkMs": 2193,
+      "typingMs": 7161,
+      "typingChars": 134,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15770,
+      "botBubbles": 3,
+      "unreadDelayMs": 2642,
+      "readDurationMs": 6000,
+      "queueDelayMs": 36966,
+      "breakKind": "spike",
+      "testedAt": 1795007218951
+    },
+    "168": {
+      "preThinkMs": 4945,
+      "typingMs": 8011,
+      "typingChars": 148,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11481,
+      "botBubbles": 1,
+      "unreadDelayMs": 5873,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14589,
+      "breakKind": "normal",
+      "testedAt": 1795007271131
+    },
+    "169": {
+      "preThinkMs": 4806,
+      "typingMs": 9000,
+      "typingChars": 152,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12982,
+      "botBubbles": 2,
+      "unreadDelayMs": 3804,
+      "readDurationMs": 6000,
+      "queueDelayMs": 43343,
+      "breakKind": "spike",
+      "testedAt": 1795007352333
+    },
+    "17": {
+      "preThinkMs": 4632,
+      "typingMs": 3529,
+      "typingChars": 43,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11674,
+      "botBubbles": 1,
+      "unreadDelayMs": 2744,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11664,
+      "breakKind": "normal",
+      "testedAt": 1794992768607
+    },
+    "170": {
+      "preThinkMs": 4685,
+      "typingMs": 7938,
+      "typingChars": 95,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12085,
+      "botBubbles": 1,
+      "unreadDelayMs": 7768,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8992,
+      "breakKind": "normal",
+      "testedAt": 1795007401016
+    },
+    "171": {
+      "preThinkMs": 2484,
+      "typingMs": 7401,
+      "typingChars": 101,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15792,
+      "botBubbles": 2,
+      "unreadDelayMs": 5130,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14949,
+      "breakKind": "normal",
+      "testedAt": 1795007453985
+    },
+    "172": {
+      "preThinkMs": 4983,
+      "typingMs": 7083,
+      "typingChars": 96,
+      "typingBursts": 2,
+      "botReplyWaitMs": 20022,
+      "botBubbles": 2,
+      "unreadDelayMs": 6100,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14804,
+      "breakKind": "normal",
+      "testedAt": 1795007514241
+    },
+    "173": {
+      "preThinkMs": 4593,
+      "typingMs": 4360,
+      "typingChars": 92,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15418,
+      "botBubbles": 2,
+      "unreadDelayMs": 3966,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10088,
+      "breakKind": "normal",
+      "testedAt": 1795007559917
+    },
+    "174": {
+      "preThinkMs": 3922,
+      "typingMs": 5615,
+      "typingChars": 81,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15904,
+      "botBubbles": 2,
+      "unreadDelayMs": 7339,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8524,
+      "breakKind": "normal",
+      "testedAt": 1795007608556
+    },
+    "175": {
+      "preThinkMs": 2618,
+      "typingMs": 7136,
+      "typingChars": 119,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15752,
+      "botBubbles": 2,
+      "unreadDelayMs": 3456,
+      "readDurationMs": 6000,
+      "queueDelayMs": 381839,
+      "breakKind": "long_rest",
+      "testedAt": 1795008026744
+    },
+    "176": {
+      "preThinkMs": 4370,
+      "typingMs": 3209,
+      "typingChars": 58,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11760,
+      "botBubbles": 2,
+      "unreadDelayMs": 7498,
+      "readDurationMs": 6000,
+      "queueDelayMs": 46203,
+      "breakKind": "spike",
+      "testedAt": 1795008107123
+    },
+    "177": {
+      "preThinkMs": 3271,
+      "typingMs": 7151,
+      "typingChars": 132,
+      "typingBursts": 2,
+      "botReplyWaitMs": 9787,
+      "botBubbles": 1,
+      "unreadDelayMs": 2996,
+      "readDurationMs": 4483,
+      "queueDelayMs": 15217,
+      "breakKind": "normal",
+      "testedAt": 1795008151359
+    },
+    "178": {
+      "preThinkMs": 2542,
+      "typingMs": 3790,
+      "typingChars": 57,
+      "typingBursts": 1,
+      "botReplyWaitMs": 13224,
+      "botBubbles": 1,
+      "unreadDelayMs": 4845,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9691,
+      "breakKind": "normal",
+      "testedAt": 1795008193948
+    },
+    "179": {
+      "preThinkMs": 2444,
+      "typingMs": 6158,
+      "typingChars": 88,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16026,
+      "botBubbles": 2,
+      "unreadDelayMs": 9282,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8145,
+      "breakKind": "normal",
+      "testedAt": 1795008243638
+    },
+    "18": {
+      "preThinkMs": 2365,
+      "typingMs": 7463,
+      "typingChars": 121,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14802,
+      "botBubbles": 2,
+      "unreadDelayMs": 5012,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1794992899704
+    },
+    "180": {
+      "preThinkMs": 2087,
+      "typingMs": 6227,
+      "typingChars": 111,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15326,
+      "botBubbles": 3,
+      "unreadDelayMs": 4143,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15209,
+      "breakKind": "normal",
+      "testedAt": 1795008294828
+    },
+    "181": {
+      "preThinkMs": 3933,
+      "typingMs": 9000,
+      "typingChars": 138,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16816,
+      "botBubbles": 3,
+      "unreadDelayMs": 7406,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10581,
+      "breakKind": "normal",
+      "testedAt": 1795008349971
+    },
+    "182": {
+      "preThinkMs": 3654,
+      "typingMs": 7471,
+      "typingChars": 122,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16688,
+      "botBubbles": 3,
+      "unreadDelayMs": 3756,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10455,
+      "breakKind": "normal",
+      "testedAt": 1795008399420
+    },
+    "183": {
+      "preThinkMs": 4825,
+      "typingMs": 9000,
+      "typingChars": 179,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11982,
+      "botBubbles": 1,
+      "unreadDelayMs": 4871,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11837,
+      "breakKind": "normal",
+      "testedAt": 1795008449467
+    },
+    "184": {
+      "preThinkMs": 3503,
+      "typingMs": 5856,
+      "typingChars": 71,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12482,
+      "botBubbles": 1,
+      "unreadDelayMs": 3967,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10613,
+      "breakKind": "normal",
+      "testedAt": 1795008493335
+    },
+    "185": {
+      "preThinkMs": 4915,
+      "typingMs": 8890,
+      "typingChars": 116,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13114,
+      "botBubbles": 1,
+      "unreadDelayMs": 7460,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15025,
+      "breakKind": "normal",
+      "testedAt": 1795008551511
+    },
+    "186": {
+      "preThinkMs": 4599,
+      "typingMs": 4958,
+      "typingChars": 82,
+      "typingBursts": 1,
+      "botReplyWaitMs": 30002,
+      "botBubbles": 0,
+      "unreadDelayMs": 0,
+      "readDurationMs": 0,
+      "queueDelayMs": 10112,
+      "breakKind": "normal",
+      "testedAt": 1795008602878
+    },
+    "187": {
+      "preThinkMs": 4338,
+      "typingMs": 7348,
+      "typingChars": 123,
+      "typingBursts": 2,
+      "botReplyWaitMs": 17734,
+      "botBubbles": 2,
+      "unreadDelayMs": 2938,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13637,
+      "breakKind": "normal",
+      "testedAt": 1795008656590
+    },
+    "188": {
+      "preThinkMs": 3026,
+      "typingMs": 5061,
+      "typingChars": 81,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14794,
+      "botBubbles": 2,
+      "unreadDelayMs": 7828,
+      "readDurationMs": 6000,
+      "queueDelayMs": 48389,
+      "breakKind": "spike",
+      "testedAt": 1795008743673
+    },
+    "189": {
+      "preThinkMs": 4052,
+      "typingMs": 4927,
+      "typingChars": 54,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15934,
+      "botBubbles": 3,
+      "unreadDelayMs": 8863,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8837,
+      "breakKind": "normal",
+      "testedAt": 1795008794068
+    },
+    "19": {
+      "preThinkMs": 4472,
+      "typingMs": 6939,
+      "typingChars": 102,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12437,
+      "botBubbles": 1,
+      "unreadDelayMs": 7578,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15019,
+      "breakKind": "normal",
+      "testedAt": 1794992952630
+    },
+    "190": {
+      "preThinkMs": 4585,
+      "typingMs": 5064,
+      "typingChars": 81,
+      "typingBursts": 1,
+      "botReplyWaitMs": 17557,
+      "botBubbles": 2,
+      "unreadDelayMs": 6387,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13777,
+      "breakKind": "normal",
+      "testedAt": 1795008849611
+    },
+    "191": {
+      "preThinkMs": 2853,
+      "typingMs": 8880,
+      "typingChars": 131,
+      "typingBursts": 2,
+      "botReplyWaitMs": 20030,
+      "botBubbles": 2,
+      "unreadDelayMs": 3761,
+      "readDurationMs": 6000,
+      "queueDelayMs": 42740,
+      "breakKind": "spike",
+      "testedAt": 1795008935764
+    },
+    "192": {
+      "preThinkMs": 4761,
+      "typingMs": 9000,
+      "typingChars": 211,
+      "typingBursts": 2,
+      "botReplyWaitMs": 25294,
+      "botBubbles": 2,
+      "unreadDelayMs": 8311,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15202,
+      "breakKind": "normal",
+      "testedAt": 1795009006033
+    },
+    "193": {
+      "preThinkMs": 2458,
+      "typingMs": 7409,
+      "typingChars": 133,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15695,
+      "botBubbles": 2,
+      "unreadDelayMs": 6749,
+      "readDurationMs": 6000,
+      "queueDelayMs": 51770,
+      "breakKind": "spike",
+      "testedAt": 1795009097716
+    },
+    "194": {
+      "preThinkMs": 2864,
+      "typingMs": 7597,
+      "typingChars": 106,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12926,
+      "botBubbles": 1,
+      "unreadDelayMs": 4718,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8771,
+      "breakKind": "normal",
+      "testedAt": 1795009142197
+    },
+    "195": {
+      "preThinkMs": 4506,
+      "typingMs": 9000,
+      "typingChars": 141,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18713,
+      "botBubbles": 2,
+      "unreadDelayMs": 8546,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12484,
+      "breakKind": "normal",
+      "testedAt": 1795009203040
+    },
+    "196": {
+      "preThinkMs": 4898,
+      "typingMs": 9000,
+      "typingChars": 153,
+      "typingBursts": 2,
+      "botReplyWaitMs": 17265,
+      "botBubbles": 3,
+      "unreadDelayMs": 3890,
+      "readDurationMs": 6000,
+      "queueDelayMs": 54978,
+      "breakKind": "micro_break",
+      "testedAt": 1795009300584
+    },
+    "197": {
+      "preThinkMs": 4755,
+      "typingMs": 5542,
+      "typingChars": 93,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14611,
+      "botBubbles": 2,
+      "unreadDelayMs": 7368,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14545,
+      "breakKind": "normal",
+      "testedAt": 1795009355095
+    },
+    "198": {
+      "preThinkMs": 3099,
+      "typingMs": 9000,
+      "typingChars": 134,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11581,
+      "botBubbles": 1,
+      "unreadDelayMs": 8267,
+      "readDurationMs": 4553,
+      "queueDelayMs": 11593,
+      "breakKind": "normal",
+      "testedAt": 1795009404705
+    },
+    "199": {
+      "preThinkMs": 3936,
+      "typingMs": 5077,
+      "typingChars": 77,
+      "typingBursts": 1,
+      "botReplyWaitMs": 16824,
+      "botBubbles": 2,
+      "unreadDelayMs": 6909,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15467,
+      "breakKind": "normal",
+      "testedAt": 1795009460472
+    },
+    "2": {
+      "preThinkMs": 3790,
+      "typingMs": 3599,
+      "typingChars": 68,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12036,
+      "botBubbles": 1,
+      "unreadDelayMs": 5404,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1794991903427
+    },
+    "20": {
+      "preThinkMs": 3197,
+      "typingMs": 5153,
+      "typingChars": 73,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10273,
+      "botBubbles": 1,
+      "unreadDelayMs": 6114,
+      "readDurationMs": 4933,
+      "queueDelayMs": 52565,
+      "breakKind": "spike",
+      "testedAt": 1794993035398
+    },
+    "200": {
+      "preThinkMs": 3888,
+      "typingMs": 6229,
+      "typingChars": 77,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11809,
+      "botBubbles": 2,
+      "unreadDelayMs": 5239,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12054,
+      "breakKind": "normal",
+      "testedAt": 1795009507229
+    },
+    "201": {
+      "preThinkMs": 2083,
+      "typingMs": 5317,
+      "typingChars": 68,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11065,
+      "botBubbles": 1,
+      "unreadDelayMs": 6271,
+      "readDurationMs": 5031,
+      "queueDelayMs": 59358,
+      "breakKind": "spike",
+      "testedAt": 1795009597891
+    },
+    "202": {
+      "preThinkMs": 2314,
+      "typingMs": 6357,
+      "typingChars": 103,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13922,
+      "botBubbles": 1,
+      "unreadDelayMs": 6301,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13532,
+      "breakKind": "normal",
+      "testedAt": 1795009647827
+    },
+    "203": {
+      "preThinkMs": 3774,
+      "typingMs": 6309,
+      "typingChars": 89,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18520,
+      "botBubbles": 2,
+      "unreadDelayMs": 3300,
+      "readDurationMs": 6000,
+      "queueDelayMs": 54809,
+      "breakKind": "spike",
+      "testedAt": 1795009742247
+    },
+    "204": {
+      "preThinkMs": 2354,
+      "typingMs": 7391,
+      "typingChars": 95,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14584,
+      "botBubbles": 2,
+      "unreadDelayMs": 6202,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14817,
+      "breakKind": "normal",
+      "testedAt": 1795009795627
+    },
+    "205": {
+      "preThinkMs": 3050,
+      "typingMs": 4836,
+      "typingChars": 61,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12027,
+      "botBubbles": 1,
+      "unreadDelayMs": 4544,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13571,
+      "breakKind": "normal",
+      "testedAt": 1795009841587
+    },
+    "206": {
+      "preThinkMs": 2373,
+      "typingMs": 5119,
+      "typingChars": 56,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11275,
+      "botBubbles": 1,
+      "unreadDelayMs": 8698,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12116,
+      "breakKind": "normal",
+      "testedAt": 1795009888846
+    },
+    "207": {
+      "preThinkMs": 3256,
+      "typingMs": 4369,
+      "typingChars": 65,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15639,
+      "botBubbles": 3,
+      "unreadDelayMs": 2912,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15935,
+      "breakKind": "normal",
+      "testedAt": 1795009939090
+    },
+    "208": {
+      "preThinkMs": 3274,
+      "typingMs": 3434,
+      "typingChars": 56,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14538,
+      "botBubbles": 2,
+      "unreadDelayMs": 3129,
+      "readDurationMs": 6000,
+      "queueDelayMs": 54577,
+      "breakKind": "spike",
+      "testedAt": 1795010025565
+    },
+    "209": {
+      "preThinkMs": 3959,
+      "typingMs": 7425,
+      "typingChars": 148,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15514,
+      "botBubbles": 2,
+      "unreadDelayMs": 6213,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9172,
+      "breakKind": "normal",
+      "testedAt": 1795010076171
+    },
+    "21": {
+      "preThinkMs": 3837,
+      "typingMs": 6069,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12982,
+      "botBubbles": 2,
+      "unreadDelayMs": 4499,
+      "readDurationMs": 6000,
+      "queueDelayMs": 84821,
+      "breakKind": "micro_break",
+      "testedAt": 1794993154147
+    },
+    "210": {
+      "preThinkMs": 2105,
+      "typingMs": 7158,
+      "typingChars": 88,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15011,
+      "botBubbles": 2,
+      "unreadDelayMs": 4137,
+      "readDurationMs": 6000,
+      "queueDelayMs": 35371,
+      "breakKind": "spike",
+      "testedAt": 1795010147468
+    },
+    "22": {
+      "preThinkMs": 3555,
+      "typingMs": 9000,
+      "typingChars": 134,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12768,
+      "botBubbles": 1,
+      "unreadDelayMs": 7206,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12559,
+      "breakKind": "normal",
+      "testedAt": 1794993205997
+    },
+    "23": {
+      "preThinkMs": 4304,
+      "typingMs": 9000,
+      "typingChars": 191,
+      "typingBursts": 2,
+      "botReplyWaitMs": 19076,
+      "botBubbles": 4,
+      "unreadDelayMs": 5616,
+      "readDurationMs": 6000,
+      "queueDelayMs": 39176,
+      "breakKind": "spike",
+      "testedAt": 1794993289687
+    },
+    "24": {
+      "preThinkMs": 3992,
+      "typingMs": 6133,
+      "typingChars": 115,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12005,
+      "botBubbles": 1,
+      "unreadDelayMs": 6813,
+      "readDurationMs": 6000,
+      "queueDelayMs": 43862,
+      "breakKind": "spike",
+      "testedAt": 1794993369039
+    },
+    "25": {
+      "preThinkMs": 3389,
+      "typingMs": 9000,
+      "typingChars": 170,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13302,
+      "botBubbles": 1,
+      "unreadDelayMs": 6064,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56235,
+      "breakKind": "spike",
+      "testedAt": 1794993463611
+    },
+    "26": {
+      "preThinkMs": 2879,
+      "typingMs": 7097,
+      "typingChars": 101,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15462,
+      "botBubbles": 2,
+      "unreadDelayMs": 7676,
+      "readDurationMs": 6000,
+      "queueDelayMs": 33830,
+      "breakKind": "spike",
+      "testedAt": 1794993537155
+    },
+    "27": {
+      "preThinkMs": 3463,
+      "typingMs": 3682,
+      "typingChars": 50,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10879,
+      "botBubbles": 1,
+      "unreadDelayMs": 2782,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14385,
+      "breakKind": "normal",
+      "testedAt": 1794993578969
+    },
+    "28": {
+      "preThinkMs": 2895,
+      "typingMs": 6434,
+      "typingChars": 87,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12606,
+      "botBubbles": 1,
+      "unreadDelayMs": 6113,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10550,
+      "breakKind": "normal",
+      "testedAt": 1794993624141
+    },
+    "29": {
+      "preThinkMs": 4918,
+      "typingMs": 8344,
+      "typingChars": 118,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15471,
+      "botBubbles": 3,
+      "unreadDelayMs": 10017,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12557,
+      "breakKind": "normal",
+      "testedAt": 1794993682047
+    },
+    "3": {
+      "preThinkMs": 3353,
+      "typingMs": 7232,
+      "typingChars": 128,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18978,
+      "botBubbles": 3,
+      "unreadDelayMs": 7996,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14123,
+      "breakKind": "normal",
+      "testedAt": 1794991961523
+    },
+    "30": {
+      "preThinkMs": 3533,
+      "typingMs": 4807,
+      "typingChars": 73,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12456,
+      "botBubbles": 1,
+      "unreadDelayMs": 6709,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56986,
+      "breakKind": "spike",
+      "testedAt": 1794993773146
+    },
+    "31": {
+      "preThinkMs": 3346,
+      "typingMs": 6755,
+      "typingChars": 100,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11290,
+      "botBubbles": 1,
+      "unreadDelayMs": 3431,
+      "readDurationMs": 5156,
+      "queueDelayMs": 57123,
+      "breakKind": "spike",
+      "testedAt": 1794993860821
+    },
+    "32": {
+      "preThinkMs": 4998,
+      "typingMs": 4548,
+      "typingChars": 75,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15544,
+      "botBubbles": 3,
+      "unreadDelayMs": 10082,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10056,
+      "breakKind": "normal",
+      "testedAt": 1794993912771
+    },
+    "33": {
+      "preThinkMs": 2095,
+      "typingMs": 9000,
+      "typingChars": 179,
+      "typingBursts": 2,
+      "botReplyWaitMs": 16926,
+      "botBubbles": 4,
+      "unreadDelayMs": 4903,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13316,
+      "breakKind": "normal",
+      "testedAt": 1794993965697
+    },
+    "34": {
+      "preThinkMs": 3868,
+      "typingMs": 5964,
+      "typingChars": 103,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12732,
+      "botBubbles": 1,
+      "unreadDelayMs": 3876,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13553,
+      "breakKind": "normal",
+      "testedAt": 1794994012349
+    },
+    "35": {
+      "preThinkMs": 3931,
+      "typingMs": 5742,
+      "typingChars": 96,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11102,
+      "botBubbles": 1,
+      "unreadDelayMs": 8220,
+      "readDurationMs": 5556,
+      "queueDelayMs": 8267,
+      "breakKind": "normal",
+      "testedAt": 1794994055800
+    },
+    "36": {
+      "preThinkMs": 2823,
+      "typingMs": 8355,
+      "typingChars": 112,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15173,
+      "botBubbles": 2,
+      "unreadDelayMs": 7860,
+      "readDurationMs": 6000,
+      "queueDelayMs": 58924,
+      "breakKind": "spike",
+      "testedAt": 1794994155554
+    },
+    "37": {
+      "preThinkMs": 3606,
+      "typingMs": 7622,
+      "typingChars": 108,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13047,
+      "botBubbles": 1,
+      "unreadDelayMs": 3454,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10599,
+      "breakKind": "normal",
+      "testedAt": 1794994200582
+    },
+    "38": {
+      "preThinkMs": 3970,
+      "typingMs": 4898,
+      "typingChars": 68,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12466,
+      "botBubbles": 1,
+      "unreadDelayMs": 2982,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14656,
+      "breakKind": "normal",
+      "testedAt": 1794994246208
+    },
+    "39": {
+      "preThinkMs": 4284,
+      "typingMs": 6159,
+      "typingChars": 84,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13287,
+      "botBubbles": 1,
+      "unreadDelayMs": 3696,
+      "readDurationMs": 6000,
+      "queueDelayMs": 40719,
+      "breakKind": "spike",
+      "testedAt": 1794994321021
+    },
+    "4": {
+      "preThinkMs": 3041,
+      "typingMs": 5212,
+      "typingChars": 94,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14400,
+      "botBubbles": 2,
+      "unreadDelayMs": 9776,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13468,
+      "breakKind": "normal",
+      "testedAt": 1794992013847
+    },
+    "40": {
+      "preThinkMs": 2014,
+      "typingMs": 6544,
+      "typingChars": 115,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14858,
+      "botBubbles": 3,
+      "unreadDelayMs": 7584,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11516,
+      "breakKind": "normal",
+      "testedAt": 1794994370196
+    },
+    "41": {
+      "preThinkMs": 3061,
+      "typingMs": 6259,
+      "typingChars": 104,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12702,
+      "botBubbles": 1,
+      "unreadDelayMs": 4499,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10323,
+      "breakKind": "normal",
+      "testedAt": 1794994413722
+    },
+    "42": {
+      "preThinkMs": 3331,
+      "typingMs": 5314,
+      "typingChars": 102,
+      "typingBursts": 1,
+      "botReplyWaitMs": 13055,
+      "botBubbles": 1,
+      "unreadDelayMs": 2790,
+      "readDurationMs": 6000,
+      "queueDelayMs": 55355,
+      "breakKind": "micro_break",
+      "testedAt": 1794994500227
+    },
+    "43": {
+      "preThinkMs": 2641,
+      "typingMs": 7481,
+      "typingChars": 109,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15071,
+      "botBubbles": 2,
+      "unreadDelayMs": 7181,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14032,
+      "breakKind": "normal",
+      "testedAt": 1794994553291
+    },
+    "44": {
+      "preThinkMs": 3808,
+      "typingMs": 7624,
+      "typingChars": 108,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11356,
+      "botBubbles": 2,
+      "unreadDelayMs": 5693,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15153,
+      "breakKind": "normal",
+      "testedAt": 1794994603596
+    },
+    "45": {
+      "preThinkMs": 3049,
+      "typingMs": 5378,
+      "typingChars": 71,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15282,
+      "botBubbles": 3,
+      "unreadDelayMs": 8186,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8431,
+      "breakKind": "normal",
+      "testedAt": 1794994650549
+    },
+    "46": {
+      "preThinkMs": 4865,
+      "typingMs": 4787,
+      "typingChars": 67,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14821,
+      "botBubbles": 2,
+      "unreadDelayMs": 8906,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15302,
+      "breakKind": "normal",
+      "testedAt": 1794994705861
+    },
+    "47": {
+      "preThinkMs": 2650,
+      "typingMs": 9000,
+      "typingChars": 111,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15324,
+      "botBubbles": 2,
+      "unreadDelayMs": 4703,
+      "readDurationMs": 6000,
+      "queueDelayMs": 393584,
+      "breakKind": "long_rest",
+      "testedAt": 1794995138026
+    },
+    "48": {
+      "preThinkMs": 3468,
+      "typingMs": 7420,
+      "typingChars": 108,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12604,
+      "botBubbles": 1,
+      "unreadDelayMs": 3055,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12329,
+      "breakKind": "normal",
+      "testedAt": 1794995183997
+    },
+    "49": {
+      "preThinkMs": 2015,
+      "typingMs": 9000,
+      "typingChars": 168,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15440,
+      "botBubbles": 3,
+      "unreadDelayMs": 6422,
+      "readDurationMs": 6000,
+      "queueDelayMs": 35209,
+      "breakKind": "spike",
+      "testedAt": 1794995260089
+    },
+    "5": {
+      "preThinkMs": 3238,
+      "typingMs": 5997,
+      "typingChars": 73,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11745,
+      "botBubbles": 1,
+      "unreadDelayMs": 7807,
+      "readDurationMs": 6000,
+      "queueDelayMs": 44364,
+      "breakKind": "spike",
+      "testedAt": 1794992093432
+    },
+    "50": {
+      "preThinkMs": 3792,
+      "typingMs": 5166,
+      "typingChars": 81,
+      "typingBursts": 1,
+      "botReplyWaitMs": 13929,
+      "botBubbles": 2,
+      "unreadDelayMs": 6917,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9100,
+      "breakKind": "normal",
+      "testedAt": 1794995306645
+    },
+    "51": {
+      "preThinkMs": 4803,
+      "typingMs": 6975,
+      "typingChars": 90,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12473,
+      "botBubbles": 1,
+      "unreadDelayMs": 8642,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11289,
+      "breakKind": "normal",
+      "testedAt": 1794995357961
+    },
+    "52": {
+      "preThinkMs": 3028,
+      "typingMs": 6057,
+      "typingChars": 73,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10590,
+      "botBubbles": 1,
+      "unreadDelayMs": 4346,
+      "readDurationMs": 5240,
+      "queueDelayMs": 15165,
+      "breakKind": "normal",
+      "testedAt": 1794995403311
+    },
+    "53": {
+      "preThinkMs": 3565,
+      "typingMs": 8002,
+      "typingChars": 106,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12821,
+      "botBubbles": 1,
+      "unreadDelayMs": 7324,
+      "readDurationMs": 6000,
+      "queueDelayMs": 58822,
+      "breakKind": "spike",
+      "testedAt": 1794995500733
+    },
+    "54": {
+      "preThinkMs": 3902,
+      "typingMs": 7080,
+      "typingChars": 100,
+      "typingBursts": 2,
+      "botReplyWaitMs": 18188,
+      "botBubbles": 2,
+      "unreadDelayMs": 2748,
+      "readDurationMs": 6000,
+      "queueDelayMs": 32944,
+      "breakKind": "spike",
+      "testedAt": 1794995572812
+    },
+    "55": {
+      "preThinkMs": 3158,
+      "typingMs": 4004,
+      "typingChars": 54,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11684,
+      "botBubbles": 1,
+      "unreadDelayMs": 3483,
+      "readDurationMs": 6000,
+      "queueDelayMs": 40916,
+      "breakKind": "spike",
+      "testedAt": 1794995642849
+    },
+    "56": {
+      "preThinkMs": 3761,
+      "typingMs": 5493,
+      "typingChars": 71,
+      "typingBursts": 1,
+      "botReplyWaitMs": 9481,
+      "botBubbles": 1,
+      "unreadDelayMs": 10301,
+      "readDurationMs": 3057,
+      "queueDelayMs": 9602,
+      "breakKind": "normal",
+      "testedAt": 1794995685300
+    },
+    "57": {
+      "preThinkMs": 2711,
+      "typingMs": 6051,
+      "typingChars": 102,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15272,
+      "botBubbles": 3,
+      "unreadDelayMs": 3092,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56187,
+      "breakKind": "spike",
+      "testedAt": 1794995775384
+    },
+    "58": {
+      "preThinkMs": 3674,
+      "typingMs": 9000,
+      "typingChars": 152,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12495,
+      "botBubbles": 1,
+      "unreadDelayMs": 4660,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9737,
+      "breakKind": "normal",
+      "testedAt": 1794995821767
+    },
+    "59": {
+      "preThinkMs": 4739,
+      "typingMs": 7163,
+      "typingChars": 87,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12100,
+      "botBubbles": 2,
+      "unreadDelayMs": 7603,
+      "readDurationMs": 6000,
+      "queueDelayMs": 50115,
+      "breakKind": "spike",
+      "testedAt": 1794995910348
+    },
+    "6": {
+      "preThinkMs": 2980,
+      "typingMs": 8001,
+      "typingChars": 97,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10788,
+      "botBubbles": 1,
+      "unreadDelayMs": 5175,
+      "readDurationMs": 4694,
+      "queueDelayMs": 12495,
+      "breakKind": "normal",
+      "testedAt": 1794992137985
+    },
+    "60": {
+      "preThinkMs": 4155,
+      "typingMs": 5228,
+      "typingChars": 87,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11713,
+      "botBubbles": 1,
+      "unreadDelayMs": 6093,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8560,
+      "breakKind": "normal",
+      "testedAt": 1794995952930
+    },
+    "61": {
+      "preThinkMs": 4484,
+      "typingMs": 5281,
+      "typingChars": 65,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15988,
+      "botBubbles": 2,
+      "unreadDelayMs": 2854,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11513,
+      "breakKind": "normal",
+      "testedAt": 1794995999865
+    },
+    "62": {
+      "preThinkMs": 4977,
+      "typingMs": 8090,
+      "typingChars": 100,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10691,
+      "botBubbles": 1,
+      "unreadDelayMs": 3912,
+      "readDurationMs": 5364,
+      "queueDelayMs": 56075,
+      "breakKind": "spike",
+      "testedAt": 1794996089887
+    },
+    "63": {
+      "preThinkMs": 4727,
+      "typingMs": 6368,
+      "typingChars": 86,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14564,
+      "botBubbles": 2,
+      "unreadDelayMs": 7490,
+      "readDurationMs": 6000,
+      "queueDelayMs": 43884,
+      "breakKind": "spike",
+      "testedAt": 1794996173811
+    },
+    "64": {
+      "preThinkMs": 3075,
+      "typingMs": 7700,
+      "typingChars": 102,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14440,
+      "botBubbles": 2,
+      "unreadDelayMs": 10687,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13554,
+      "breakKind": "normal",
+      "testedAt": 1794996230124
+    },
+    "65": {
+      "preThinkMs": 2280,
+      "typingMs": 7112,
+      "typingChars": 105,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10203,
+      "botBubbles": 1,
+      "unreadDelayMs": 6612,
+      "readDurationMs": 4618,
+      "queueDelayMs": 15857,
+      "breakKind": "normal",
+      "testedAt": 1794996277683
+    },
+    "66": {
+      "preThinkMs": 2692,
+      "typingMs": 4883,
+      "typingChars": 96,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12364,
+      "botBubbles": 1,
+      "unreadDelayMs": 4387,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12575,
+      "breakKind": "normal",
+      "testedAt": 1794996321470
+    },
+    "67": {
+      "preThinkMs": 4646,
+      "typingMs": 6926,
+      "typingChars": 112,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15376,
+      "botBubbles": 2,
+      "unreadDelayMs": 2654,
+      "readDurationMs": 6000,
+      "queueDelayMs": 35068,
+      "breakKind": "spike",
+      "testedAt": 1794996393070
+    },
+    "68": {
+      "preThinkMs": 4570,
+      "typingMs": 9000,
+      "typingChars": 157,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15090,
+      "botBubbles": 2,
+      "unreadDelayMs": 5509,
+      "readDurationMs": 6000,
+      "queueDelayMs": 55030,
+      "breakKind": "micro_break",
+      "testedAt": 1794996489196
+    },
+    "69": {
+      "preThinkMs": 4907,
+      "typingMs": 5184,
+      "typingChars": 68,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11363,
+      "botBubbles": 1,
+      "unreadDelayMs": 2519,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14024,
+      "breakKind": "normal",
+      "testedAt": 1794996534195
+    },
+    "7": {
+      "preThinkMs": 2419,
+      "typingMs": 7839,
+      "typingChars": 146,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11188,
+      "botBubbles": 1,
+      "unreadDelayMs": 3988,
+      "readDurationMs": 4640,
+      "queueDelayMs": 15740,
+      "breakKind": "normal",
+      "testedAt": 1794992184206
+    },
+    "70": {
+      "preThinkMs": 3320,
+      "typingMs": 5363,
+      "typingChars": 82,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10166,
+      "botBubbles": 1,
+      "unreadDelayMs": 3082,
+      "readDurationMs": 5131,
+      "queueDelayMs": 14768,
+      "breakKind": "normal",
+      "testedAt": 1794996577019
+    },
+    "71": {
+      "preThinkMs": 4937,
+      "typingMs": 5750,
+      "typingChars": 72,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15172,
+      "botBubbles": 2,
+      "unreadDelayMs": 5361,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8634,
+      "breakKind": "normal",
+      "testedAt": 1794996623748
+    },
+    "72": {
+      "preThinkMs": 3662,
+      "typingMs": 6038,
+      "typingChars": 98,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14615,
+      "botBubbles": 2,
+      "unreadDelayMs": 7004,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14959,
+      "breakKind": "normal",
+      "testedAt": 1794996677084
+    },
+    "73": {
+      "preThinkMs": 2761,
+      "typingMs": 6663,
+      "typingChars": 81,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10341,
+      "botBubbles": 1,
+      "unreadDelayMs": 7998,
+      "readDurationMs": 5870,
+      "queueDelayMs": 12445,
+      "breakKind": "normal",
+      "testedAt": 1794996724091
+    },
+    "74": {
+      "preThinkMs": 2582,
+      "typingMs": 9000,
+      "typingChars": 142,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15223,
+      "botBubbles": 2,
+      "unreadDelayMs": 7644,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14896,
+      "breakKind": "normal",
+      "testedAt": 1794996780337
+    },
+    "75": {
+      "preThinkMs": 4381,
+      "typingMs": 9000,
+      "typingChars": 138,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10043,
+      "botBubbles": 1,
+      "unreadDelayMs": 3548,
+      "readDurationMs": 5356,
+      "queueDelayMs": 11862,
+      "breakKind": "normal",
+      "testedAt": 1794996825500
+    },
+    "76": {
+      "preThinkMs": 3643,
+      "typingMs": 4830,
+      "typingChars": 101,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12917,
+      "botBubbles": 1,
+      "unreadDelayMs": 7773,
+      "readDurationMs": 6000,
+      "queueDelayMs": 44622,
+      "breakKind": "spike",
+      "testedAt": 1794996906227
+    },
+    "77": {
+      "preThinkMs": 2283,
+      "typingMs": 7222,
+      "typingChars": 97,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14861,
+      "botBubbles": 3,
+      "unreadDelayMs": 5141,
+      "readDurationMs": 6000,
+      "queueDelayMs": 14351,
+      "breakKind": "normal",
+      "testedAt": 1794996957089
+    },
+    "78": {
+      "preThinkMs": 3194,
+      "typingMs": 5033,
+      "typingChars": 64,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12638,
+      "botBubbles": 2,
+      "unreadDelayMs": 3415,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8146,
+      "breakKind": "normal",
+      "testedAt": 1794996996455
+    },
+    "79": {
+      "preThinkMs": 4429,
+      "typingMs": 7342,
+      "typingChars": 124,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10801,
+      "botBubbles": 1,
+      "unreadDelayMs": 5386,
+      "readDurationMs": 5056,
+      "queueDelayMs": 10946,
+      "breakKind": "normal",
+      "testedAt": 1794997041351
+    },
+    "8": {
+      "preThinkMs": 4361,
+      "typingMs": 9000,
+      "typingChars": 171,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14278,
+      "botBubbles": 2,
+      "unreadDelayMs": 4213,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13950,
+      "breakKind": "normal",
+      "testedAt": 1794992236427
+    },
+    "80": {
+      "preThinkMs": 3842,
+      "typingMs": 6968,
+      "typingChars": 107,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13168,
+      "botBubbles": 1,
+      "unreadDelayMs": 4446,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13209,
+      "breakKind": "normal",
+      "testedAt": 1794997089964
+    },
+    "81": {
+      "preThinkMs": 2528,
+      "typingMs": 6071,
+      "typingChars": 86,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15307,
+      "botBubbles": 2,
+      "unreadDelayMs": 3082,
+      "readDurationMs": 6000,
+      "queueDelayMs": 35899,
+      "breakKind": "spike",
+      "testedAt": 1794997159780
+    },
+    "82": {
+      "preThinkMs": 2950,
+      "typingMs": 3734,
+      "typingChars": 62,
+      "typingBursts": 1,
+      "botReplyWaitMs": 10712,
+      "botBubbles": 1,
+      "unreadDelayMs": 4249,
+      "readDurationMs": 5256,
+      "queueDelayMs": 14648,
+      "breakKind": "normal",
+      "testedAt": 1794997202396
+    },
+    "83": {
+      "preThinkMs": 2002,
+      "typingMs": 7046,
+      "typingChars": 107,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13859,
+      "botBubbles": 2,
+      "unreadDelayMs": 7331,
+      "readDurationMs": 6000,
+      "queueDelayMs": 11898,
+      "breakKind": "normal",
+      "testedAt": 1794997251720
+    },
+    "84": {
+      "preThinkMs": 2760,
+      "typingMs": 6089,
+      "typingChars": 80,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10007,
+      "botBubbles": 1,
+      "unreadDelayMs": 5302,
+      "readDurationMs": 5471,
+      "queueDelayMs": 12727,
+      "breakKind": "normal",
+      "testedAt": 1794997295020
+    },
+    "85": {
+      "preThinkMs": 2379,
+      "typingMs": 5636,
+      "typingChars": 78,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14982,
+      "botBubbles": 2,
+      "unreadDelayMs": 4593,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8747,
+      "breakKind": "normal",
+      "testedAt": 1794997338325
+    },
+    "86": {
+      "preThinkMs": 3256,
+      "typingMs": 6728,
+      "typingChars": 79,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10681,
+      "botBubbles": 1,
+      "unreadDelayMs": 2507,
+      "readDurationMs": 5273,
+      "queueDelayMs": 12531,
+      "breakKind": "normal",
+      "testedAt": 1794997380357
+    },
+    "87": {
+      "preThinkMs": 4072,
+      "typingMs": 2554,
+      "typingChars": 38,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12285,
+      "botBubbles": 1,
+      "unreadDelayMs": 9267,
+      "readDurationMs": 6000,
+      "queueDelayMs": 36111,
+      "breakKind": "spike",
+      "testedAt": 1794997451648
+    },
+    "88": {
+      "preThinkMs": 3679,
+      "typingMs": 6422,
+      "typingChars": 85,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13686,
+      "botBubbles": 1,
+      "unreadDelayMs": 2524,
+      "readDurationMs": 6000,
+      "queueDelayMs": 328573,
+      "breakKind": "long_rest",
+      "testedAt": 1794997813523
+    },
+    "89": {
+      "preThinkMs": 2517,
+      "typingMs": 7399,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15701,
+      "botBubbles": 3,
+      "unreadDelayMs": 5017,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8925,
+      "breakKind": "normal",
+      "testedAt": 1794997860156
+    },
+    "9": {
+      "preThinkMs": 2617,
+      "typingMs": 6556,
+      "typingChars": 79,
+      "typingBursts": 2,
+      "botReplyWaitMs": 17251,
+      "botBubbles": 3,
+      "unreadDelayMs": 3075,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795054623073
+    },
+    "90": {
+      "preThinkMs": 4168,
+      "typingMs": 7817,
+      "typingChars": 115,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13199,
+      "botBubbles": 1,
+      "unreadDelayMs": 5586,
+      "readDurationMs": 4841,
+      "queueDelayMs": 14608,
+      "breakKind": "normal",
+      "testedAt": 1794997911326
+    },
+    "91": {
+      "preThinkMs": 4713,
+      "typingMs": 4789,
+      "typingChars": 89,
+      "typingBursts": 1,
+      "botReplyWaitMs": 13703,
+      "botBubbles": 2,
+      "unreadDelayMs": 4666,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8383,
+      "breakKind": "normal",
+      "testedAt": 1794997954587
+    },
+    "92": {
+      "preThinkMs": 2864,
+      "typingMs": 5649,
+      "typingChars": 66,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15236,
+      "botBubbles": 3,
+      "unreadDelayMs": 5604,
+      "readDurationMs": 6000,
+      "queueDelayMs": 56907,
+      "breakKind": "spike",
+      "testedAt": 1794998047849
+    },
+    "93": {
+      "preThinkMs": 3054,
+      "typingMs": 4938,
+      "typingChars": 81,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11943,
+      "botBubbles": 2,
+      "unreadDelayMs": 7020,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12569,
+      "breakKind": "normal",
+      "testedAt": 1794998094347
+    },
+    "94": {
+      "preThinkMs": 4947,
+      "typingMs": 5053,
+      "typingChars": 86,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14953,
+      "botBubbles": 2,
+      "unreadDelayMs": 4946,
+      "readDurationMs": 6000,
+      "queueDelayMs": 54337,
+      "breakKind": "spike",
+      "testedAt": 1794998185839
+    },
+    "95": {
+      "preThinkMs": 3958,
+      "typingMs": 6466,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13239,
+      "botBubbles": 2,
+      "unreadDelayMs": 4026,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15500,
+      "breakKind": "normal",
+      "testedAt": 1794998236190
+    },
+    "96": {
+      "preThinkMs": 3612,
+      "typingMs": 6980,
+      "typingChars": 85,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14303,
+      "botBubbles": 2,
+      "unreadDelayMs": 3414,
+      "readDurationMs": 6000,
+      "queueDelayMs": 49428,
+      "breakKind": "spike",
+      "testedAt": 1794998320938
+    },
+    "97": {
+      "preThinkMs": 3281,
+      "typingMs": 4012,
+      "typingChars": 73,
+      "typingBursts": 1,
+      "botReplyWaitMs": 14393,
+      "botBubbles": 2,
+      "unreadDelayMs": 7140,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10220,
+      "breakKind": "normal",
+      "testedAt": 1794998366973
+    },
+    "98": {
+      "preThinkMs": 3687,
+      "typingMs": 6025,
+      "typingChars": 102,
+      "typingBursts": 2,
+      "botReplyWaitMs": 10409,
+      "botBubbles": 1,
+      "unreadDelayMs": 6330,
+      "readDurationMs": 5383,
+      "queueDelayMs": 13717,
+      "breakKind": "normal",
+      "testedAt": 1794998413603
+    },
+    "99": {
+      "preThinkMs": 3127,
+      "typingMs": 6502,
+      "typingChars": 97,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14912,
+      "botBubbles": 2,
+      "unreadDelayMs": 6791,
+      "readDurationMs": 6000,
+      "queueDelayMs": 10879,
+      "breakKind": "normal",
+      "testedAt": 1794998462939
+    }
+  },
+  "outOfBank": {
+    "1": {
+      "preThinkMs": 3310,
+      "typingMs": 9000,
+      "typingChars": 116,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12682,
+      "botBubbles": 1,
+      "unreadDelayMs": 2686,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795025259595
+    },
+    "10": {
+      "preThinkMs": 4989,
+      "typingMs": 7496,
+      "typingChars": 92,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13317,
+      "botBubbles": 1,
+      "unreadDelayMs": 5349,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9655,
+      "breakKind": "normal",
+      "testedAt": 1795052996400
+    },
+    "11": {
+      "preThinkMs": 3366,
+      "typingMs": 9000,
+      "typingChars": 168,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11656,
+      "botBubbles": 1,
+      "unreadDelayMs": 2753,
+      "readDurationMs": 5644,
+      "queueDelayMs": 11478,
+      "breakKind": "normal",
+      "testedAt": 1795053077800
+    },
+    "12": {
+      "preThinkMs": 3608,
+      "typingMs": 9000,
+      "typingChars": 181,
+      "typingBursts": 2,
+      "botReplyWaitMs": 26577,
+      "botBubbles": 2,
+      "unreadDelayMs": 6438,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12652,
+      "breakKind": "normal",
+      "testedAt": 1795053167787
+    },
+    "13": {
+      "preThinkMs": 2877,
+      "typingMs": 7234,
+      "typingChars": 100,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12437,
+      "botBubbles": 1,
+      "unreadDelayMs": 6482,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13455,
+      "breakKind": "normal",
+      "testedAt": 1795053238763
+    },
+    "14": {
+      "preThinkMs": 3057,
+      "typingMs": 7088,
+      "typingChars": 125,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12371,
+      "botBubbles": 1,
+      "unreadDelayMs": 4941,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9277,
+      "breakKind": "normal",
+      "testedAt": 1795053289626
+    },
+    "15": {
+      "preThinkMs": 2797,
+      "typingMs": 9000,
+      "typingChars": 107,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12613,
+      "botBubbles": 1,
+      "unreadDelayMs": 5782,
+      "readDurationMs": 6000,
+      "queueDelayMs": 9400,
+      "breakKind": "normal",
+      "testedAt": 1795053339732
+    },
+    "16": {
+      "preThinkMs": 4782,
+      "typingMs": 6342,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12457,
+      "botBubbles": 1,
+      "unreadDelayMs": 5738,
+      "readDurationMs": 6000,
+      "queueDelayMs": 15023,
+      "breakKind": "normal",
+      "testedAt": 1795053410252
+    },
+    "17": {
+      "preThinkMs": 4913,
+      "typingMs": 5116,
+      "typingChars": 84,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12481,
+      "botBubbles": 1,
+      "unreadDelayMs": 6695,
+      "readDurationMs": 6000,
+      "queueDelayMs": 32180,
+      "breakKind": "spike",
+      "testedAt": 1795053498699
+    },
+    "18": {
+      "preThinkMs": 3639,
+      "typingMs": 4144,
+      "typingChars": 67,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12532,
+      "botBubbles": 1,
+      "unreadDelayMs": 6203,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795057104000
+    },
+    "19": {
+      "preThinkMs": 2305,
+      "typingMs": 8855,
+      "typingChars": 124,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13507,
+      "botBubbles": 1,
+      "unreadDelayMs": 8023,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795057270489
+    },
+    "2": {
+      "preThinkMs": 3126,
+      "typingMs": 7223,
+      "typingChars": 109,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11636,
+      "botBubbles": 1,
+      "unreadDelayMs": 3933,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795025192451
+    },
+    "20": {
+      "preThinkMs": 4558,
+      "typingMs": 7043,
+      "typingChars": 98,
+      "typingBursts": 2,
+      "botReplyWaitMs": 8656,
+      "botBubbles": 1,
+      "unreadDelayMs": 4323,
+      "readDurationMs": 5158,
+      "queueDelayMs": 0,
+      "testedAt": 1795071606705,
+      "testedByDevice": {
+        "deviceUuid": "d1c992a5b4554d289b4fdd97ad064b48",
+        "phoneNumber": "6281533851156@s.whatsapp.net"
+      }
+    },
+    "21": {
+      "preThinkMs": 3267,
+      "typingMs": 6001,
+      "typingChars": 77,
+      "typingBursts": 2,
+      "botReplyWaitMs": 8673,
+      "botBubbles": 1,
+      "unreadDelayMs": 6766,
+      "readDurationMs": 4825,
+      "queueDelayMs": 0,
+      "testedAt": 1795071605989,
+      "testedByDevice": {
+        "deviceUuid": "5122dbd602fb4982a4a5b75018920d47",
+        "phoneNumber": "6285260331851@s.whatsapp.net"
+      }
+    },
+    "22": {
+      "preThinkMs": 3663,
+      "typingMs": 6713,
+      "typingChars": 94,
+      "typingBursts": 2,
+      "botReplyWaitMs": 30000,
+      "botBubbles": 0,
+      "unreadDelayMs": 0,
+      "readDurationMs": 0,
+      "queueDelayMs": 13369,
+      "breakKind": "normal",
+      "testedAt": 1795071681545,
+      "testedByDevice": {
+        "deviceUuid": "d1c992a5b4554d289b4fdd97ad064b48",
+        "phoneNumber": "6281533851156@s.whatsapp.net"
+      }
+    },
+    "23": {
+      "preThinkMs": 4135,
+      "typingMs": 6688,
+      "typingChars": 82,
+      "typingBursts": 2,
+      "botReplyWaitMs": 11667,
+      "botBubbles": 1,
+      "unreadDelayMs": 6245,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795057050793
+    },
+    "24": {
+      "preThinkMs": 2358,
+      "typingMs": 4967,
+      "typingChars": 92,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12412,
+      "botBubbles": 1,
+      "unreadDelayMs": 3032,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795056892222
+    },
+    "25": {
+      "preThinkMs": 4943,
+      "typingMs": 5479,
+      "typingChars": 80,
+      "typingBursts": 1,
+      "botReplyWaitMs": 12648,
+      "botBubbles": 1,
+      "unreadDelayMs": 7991,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795056971115
+    },
+    "3": {
+      "preThinkMs": 3322,
+      "typingMs": 7581,
+      "typingChars": 109,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12474,
+      "botBubbles": 1,
+      "unreadDelayMs": 5643,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795025345127
+    },
+    "4": {
+      "preThinkMs": 4265,
+      "typingMs": 4821,
+      "typingChars": 95,
+      "typingBursts": 1,
+      "botReplyWaitMs": 11989,
+      "botBubbles": 1,
+      "unreadDelayMs": 6560,
+      "readDurationMs": 6000,
+      "queueDelayMs": 8585,
+      "breakKind": "normal",
+      "testedAt": 1795025407411
+    },
+    "5": {
+      "preThinkMs": 4594,
+      "typingMs": 4621,
+      "typingChars": 72,
+      "typingBursts": 1,
+      "botReplyWaitMs": 15744,
+      "botBubbles": 3,
+      "unreadDelayMs": 5494,
+      "readDurationMs": 6000,
+      "queueDelayMs": 47776,
+      "breakKind": "spike",
+      "testedAt": 1795025508399
+    },
+    "6": {
+      "preThinkMs": 4094,
+      "typingMs": 6453,
+      "typingChars": 86,
+      "typingBursts": 2,
+      "botReplyWaitMs": 13611,
+      "botBubbles": 3,
+      "unreadDelayMs": 2852,
+      "readDurationMs": 6000,
+      "queueDelayMs": 13150,
+      "breakKind": "normal",
+      "testedAt": 1795025561429
+    },
+    "7": {
+      "preThinkMs": 4061,
+      "typingMs": 8663,
+      "typingChars": 148,
+      "typingBursts": 2,
+      "botReplyWaitMs": 15675,
+      "botBubbles": 3,
+      "unreadDelayMs": 6672,
+      "readDurationMs": 6000,
+      "queueDelayMs": 0,
+      "testedAt": 1795052769700
+    },
+    "8": {
+      "preThinkMs": 3812,
+      "typingMs": 7337,
+      "typingChars": 104,
+      "typingBursts": 2,
+      "botReplyWaitMs": 14797,
+      "botBubbles": 2,
+      "unreadDelayMs": 3809,
+      "readDurationMs": 6000,
+      "queueDelayMs": 51739,
+      "breakKind": "spike",
+      "testedAt": 1795052866959
+    },
+    "9": {
+      "preThinkMs": 4234,
+      "typingMs": 6485,
+      "typingChars": 83,
+      "typingBursts": 2,
+      "botReplyWaitMs": 12523,
+      "botBubbles": 1,
+      "unreadDelayMs": 4179,
+      "readDurationMs": 6000,
+      "queueDelayMs": 12617,
+      "breakKind": "normal",
+      "testedAt": 1795052927930
+    }
+  },
+  "stress": {
+    "1": {
+      "preThinkMs": 2102,
+      "typingMs": 6457,
+      "typingChars": 107,
+      "typingBursts": 2,
+      "botReplyWaitMs": 9916,
+      "botBubbles": 1,
+      "unreadDelayMs": 6902,
+      "readDurationMs": 5075,
+      "queueDelayMs": 0,
+      "testedAt": 1795069135556,
+      "testedByDevice": {
+        "deviceUuid": "2",
+        "phoneNumber": "6281533851156@s.whatsapp.net"
+      }
+    },
+    "2": {
+      "preThinkMs": 2375,
+      "typingMs": 7967,
+      "typingChars": 105,
+      "typingBursts": 2,
+      "botReplyWaitMs": 9944,
+      "botBubbles": 1,
+      "unreadDelayMs": 4624,
+      "readDurationMs": 5533,
+      "queueDelayMs": 9579,
+      "breakKind": "normal",
+      "testedAt": 1795069197804,
+      "testedByDevice": {
+        "deviceUuid": "2",
+        "phoneNumber": "6285260331851@s.whatsapp.net"
+      }
+    },
+    "3": {
+      "preThinkMs": 3575,
+      "typingMs": 4716,
+      "typingChars": 81,
+      "typingBursts": 1,
+      "botReplyWaitMs": 30002,
+      "botBubbles": 0,
+      "unreadDelayMs": 0,
+      "readDurationMs": 0,
+      "queueDelayMs": 11521,
+      "breakKind": "normal",
+      "testedAt": 1795069257285,
+      "testedByDevice": {
+        "deviceUuid": "2",
+        "phoneNumber": "6281533851156@s.whatsapp.net"
+      }
+    },
+    "4": {
+      "preThinkMs": 3734,
+      "typingMs": 7422,
+      "typingChars": 95,
+      "typingBursts": 2,
+      "botReplyWaitMs": 22866,
+      "botBubbles": 2,
+      "unreadDelayMs": 8881,
+      "readDurationMs": 5506,
+      "queueDelayMs": 10998,
+      "breakKind": "normal",
+      "testedAt": 1795069317827,
+      "testedByDevice": {
+        "deviceUuid": "2",
+        "phoneNumber": "6285260331851@s.whatsapp.net"
+      }
+    },
+    "5": {
+      "preThinkMs": 3459,
+      "typingMs": 4599,
+      "typingChars": 65,
+      "typingBursts": 1,
+      "botReplyWaitMs": 30000,
+      "botBubbles": 0,
+      "unreadDelayMs": 0,
+      "readDurationMs": 0,
+      "queueDelayMs": 8907,
+      "breakKind": "normal",
+      "testedAt": 1795069381841,
+      "testedByDevice": {
+        "deviceUuid": "2",
+        "phoneNumber": "6281533851156@s.whatsapp.net"
+      }
+    }
+  },
+  "bankMedia": {
+    "1": [
+      "/media/bank_1_b1_1794991636175.png"
+    ],
+    "104": [
+      "/media/bank_104_b1_1794998735709.png"
+    ],
+    "105": [
+      "/media/bank_105_b1_1795005919319.png"
+    ],
+    "106": [
+      "/media/bank_106_b1_1795005989931.png"
+    ],
+    "107": [
+      "/media/bank_107_b1_1795006156963.png"
+    ],
+    "108": [
+      "/media/bank_108_b1_1795006205910.png"
+    ],
+    "109": [
+      "/media/bank_109_b1_1795014651476.png"
+    ],
+    "110": [
+      "/media/bank_110_b1_1795014703391.png"
+    ],
+    "114": [
+      "/media/bank_114_b1_1795014971673.png"
+    ],
+    "115": [
+      "/media/bank_115_b1_1795015020463.png"
+    ],
+    "116": [
+      "/media/bank_116_b1_1795015076539.png"
+    ],
+    "117": [
+      "/media/bank_117_b1_1795015152833.png"
+    ],
+    "119": [
+      "/media/bank_119_b1_1795015257823.png"
+    ],
+    "120": [
+      "/media/bank_120_b1_1795015342464.png"
+    ],
+    "121": [
+      "/media/bank_121_b1_1795015391049.png"
+    ],
+    "122": [
+      "/media/bank_122_b1_1795015480951.png"
+    ],
+    "127": [
+      "/media/bank_127_b1_1795015899847.png"
+    ],
+    "132": [
+      "/media/bank_132_b1_1795016190542.png"
+    ],
+    "133": [
+      "/media/bank_133_b1_1795016241133.png"
+    ],
+    "135": [
+      "/media/bank_135_b1_1795016333563.png"
+    ],
+    "137": [
+      "/media/bank_137_b1_1795016420067.png"
+    ],
+    "138": [
+      "/media/bank_138_b1_1795016472690.png"
+    ],
+    "14": [
+      "/media/bank_14_b1_1794992626987.png"
+    ],
+    "140": [
+      "/media/bank_140_b1_1795016612423.png"
+    ],
+    "141": [
+      "/media/bank_141_b1_1795016662099.png"
+    ],
+    "143": [
+      "/media/bank_143_b1_1795016805453.png"
+    ],
+    "144": [
+      "/media/bank_144_b1_1795016854088.png"
+    ],
+    "147": [
+      "/media/bank_147_b1_1795017045436.png"
+    ],
+    "149": [
+      "/media/bank_149_b1_1795017213629.png"
+    ],
+    "150": [
+      "/media/bank_150_b1_1795017267774.png"
+    ],
+    "154": [
+      "/media/bank_154_b1_1795017709703.png"
+    ],
+    "156": [
+      "/media/bank_156_b1_1795006479977.png"
+    ],
+    "157": [
+      "/media/bank_157_b1_1795006536311.png"
+    ],
+    "159": [
+      "/media/bank_159_b1_1795006681605.png"
+    ],
+    "16": [
+      "/media/bank_16_b1_1794992714720.png"
+    ],
+    "160": [
+      "/media/bank_160_b1_1795006772720.png"
+    ],
+    "161": [
+      "/media/bank_161_b1_1795006820340.png"
+    ],
+    "162": [
+      "/media/bank_162_b1_1795006867283.png"
+    ],
+    "163": [
+      "/media/bank_163_b1_1795006916591.png"
+    ],
+    "164": [
+      "/media/bank_164_b1_1795007036251.png"
+    ],
+    "165": [
+      "/media/bank_165_b1_1795007087019.png"
+    ],
+    "167": [
+      "/media/bank_167_b1_1795007210295.png"
+    ],
+    "171": [
+      "/media/bank_171_b1_1795007442848.png"
+    ],
+    "172": [
+      "/media/bank_172_b1_1795007502134.png"
+    ],
+    "173": [
+      "/media/bank_173_b1_1795007549948.png"
+    ],
+    "174": [
+      "/media/bank_174_b1_1795007595209.png"
+    ],
+    "175": [
+      "/media/bank_175_b1_1795008017280.png"
+    ],
+    "179": [
+      "/media/bank_179_b1_1795008228347.png"
+    ],
+    "18": [
+      "/media/bank_18_b1_1794992888685.png"
+    ],
+    "180": [
+      "/media/bank_180_b1_1795008284676.png"
+    ],
+    "181": [
+      "/media/bank_181_b1_1795008336558.png"
+    ],
+    "182": [
+      "/media/bank_182_b1_1795008389656.png"
+    ],
+    "187": [
+      "/media/bank_187_b1_1795008647647.png"
+    ],
+    "188": [
+      "/media/bank_188_b1_1795008729836.png"
+    ],
+    "189": [
+      "/media/bank_189_b1_1795008779203.png"
+    ],
+    "190": [
+      "/media/bank_190_b1_1795008837215.png"
+    ],
+    "191": [
+      "/media/bank_191_b1_1795008925994.png"
+    ],
+    "192": [
+      "/media/bank_192_b1_1795008991715.png"
+    ],
+    "195": [
+      "/media/bank_195_b1_1795009188487.png"
+    ],
+    "196": [
+      "/media/bank_196_b1_1795009290692.png"
+    ],
+    "197": [
+      "/media/bank_197_b1_1795009341721.png"
+    ],
+    "199": [
+      "/media/bank_199_b1_1795009447559.png"
+    ],
+    "203": [
+      "/media/bank_203_b1_1795009732943.png"
+    ],
+    "204": [
+      "/media/bank_204_b1_1795009783419.png"
+    ],
+    "207": [
+      "/media/bank_207_b1_1795009930169.png"
+    ],
+    "208": [
+      "/media/bank_208_b1_1795010016427.png"
+    ],
+    "209": [
+      "/media/bank_209_b1_1795010063951.png"
+    ],
+    "210": [
+      "/media/bank_210_b1_1795010137327.png"
+    ],
+    "23": [
+      "/media/bank_23_b1_1794993278066.png",
+      "/media/bank_23_b3_1794993278066.png"
+    ],
+    "26": [
+      "/media/bank_26_b1_1794993523475.png"
+    ],
+    "29": [
+      "/media/bank_29_b1_1794993666023.png"
+    ],
+    "3": [
+      "/media/bank_3_b1_1794991947523.png"
+    ],
+    "32": [
+      "/media/bank_32_b1_1794993896681.png"
+    ],
+    "33": [
+      "/media/bank_33_b1_1794993954788.png",
+      "/media/bank_33_b3_1794993954789.png"
+    ],
+    "36": [
+      "/media/bank_36_b1_1794994141690.png"
+    ],
+    "4": [
+      "/media/bank_4_b1_1794991998069.png"
+    ],
+    "40": [
+      "/media/bank_40_b1_1794994356602.png"
+    ],
+    "43": [
+      "/media/bank_43_b1_1794994540105.png"
+    ],
+    "45": [
+      "/media/bank_45_b1_1794994636351.png"
+    ],
+    "46": [
+      "/media/bank_46_b1_1794994690947.png"
+    ],
+    "47": [
+      "/media/bank_47_b1_1794995127263.png"
+    ],
+    "49": [
+      "/media/bank_49_b1_1794995247663.png"
+    ],
+    "50": [
+      "/media/bank_50_b1_1794995293716.png"
+    ],
+    "54": [
+      "/media/bank_54_b1_1794995564049.png"
+    ],
+    "57": [
+      "/media/bank_57_b1_1794995766285.png"
+    ],
+    "61": [
+      "/media/bank_61_b1_1794995991007.png"
+    ],
+    "63": [
+      "/media/bank_63_b1_1794996160310.png"
+    ],
+    "64": [
+      "/media/bank_64_b1_1794996213428.png"
+    ],
+    "67": [
+      "/media/bank_67_b1_1794996384414.png"
+    ],
+    "68": [
+      "/media/bank_68_b1_1794996477681.png"
+    ],
+    "71": [
+      "/media/bank_71_b1_1794996612383.png"
+    ],
+    "72": [
+      "/media/bank_72_b1_1794996664072.png"
+    ],
+    "74": [
+      "/media/bank_74_b1_1794996766682.png"
+    ],
+    "77": [
+      "/media/bank_77_b1_1794996945940.png"
+    ],
+    "8": [
+      "/media/bank_8_b1_1794992226211.png"
+    ],
+    "81": [
+      "/media/bank_81_b1_1794997150690.png"
+    ],
+    "85": [
+      "/media/bank_85_b1_1794997327721.png"
+    ],
+    "89": [
+      "/media/bank_89_b1_1794997849137.png"
+    ],
+    "9": [
+      "/media/bank_9_b1_1795054613990.png"
+    ],
+    "92": [
+      "/media/bank_92_b1_1794998036234.png"
+    ],
+    "94": [
+      "/media/bank_94_b1_1794998174887.png"
+    ],
+    "96": [
+      "/media/bank_96_b1_1794998311515.png"
+    ],
+    "97": [
+      "/media/bank_97_b1_1794998353825.png"
+    ],
+    "99": [
+      "/media/bank_99_b1_1794998450142.png"
+    ]
+  },
+  "outOfBankMedia": {
+    "12": [
+      "/media/diluarbank_12_b1_1795053155348.png"
+    ],
+    "5": [
+      "/media/diluarbank_5_b1_1795025496899.png"
+    ],
+    "6": [
+      "/media/diluarbank_6_b1_1795025552569.png"
+    ],
+    "7": [
+      "/media/diluarbank_7_b1_1795052756063.png"
+    ],
+    "8": [
+      "/media/diluarbank_8_b1_1795052857143.png"
+    ]
+  }
+}
