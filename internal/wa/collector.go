@@ -37,6 +37,11 @@ type receivedEvent struct {
 	senderAltUser string
 	text          string
 	mediaName     string
+	// mediaBytes + mediaExt were already decoded by the existing helper in
+	// client.go (downloadMediaIfPresent). When the caller passes mediaBytes=nil
+	// the collector uses MediaName only (legacy path untouched).
+	mediaBytes []byte
+	mediaExt   string
 }
 
 // RegisterCollector attaches an additional subscriber on this client. The
@@ -124,15 +129,32 @@ func (col *Collector) Close() {
 	})
 }
 
+// hasCollectorsRegistered is a cheap fast-path: {sync.Map.Range} with a count
+// short-circuit. It avoids downloading media when only the legacy runner is
+// active (which downloads on its own).
+func hasCollectorsRegistered(c *Client) bool {
+	if c == nil {
+		return false
+	}
+	found := false
+	c.collectors.Range(func(_, _ any) bool {
+		found = true
+		return false
+	})
+	return found
+}
+
 // CollectedBubble is the public shape of a received bot bubble. The legacy
 // replyCollector channel keeps using the unexported collectedBubble so no
 // existing runner code changes.
 type CollectedBubble struct {
-	ID        string
-	Chat      string // sender chat JID (raw)
-	Sender    string // sender JID (raw)
-	Text      string
-	MediaName string // display name for the "message envelope", empty when text-only
+	ID         string
+	Chat       string // sender chat JID (raw)
+	Sender     string // sender JID (raw)
+	Text       string
+	MediaName  string // display name for the "message envelope", empty when text-only
+	MediaBytes []byte // decoded attachment (nil for text-only or oversize)
+	MediaExt   string
 }
 
 // matchesFilters checks the bubble's timestamp and bot number without touching
@@ -172,11 +194,13 @@ func (c *Client) deliverToCollectors(evt *receivedEvent) {
 		}
 		select {
 		case coll.ch <- CollectedBubble{
-			ID:        string(evt.id),
-			Chat:      evt.chatUser,
-			Sender:    evt.senderUser,
-			Text:      evt.text,
-			MediaName: evt.mediaName,
+			ID:         string(evt.id),
+			Chat:       evt.chatUser,
+			Sender:     evt.senderUser,
+			Text:       evt.text,
+			MediaName:  evt.mediaName,
+			MediaBytes: evt.mediaBytes,
+			MediaExt:   evt.mediaExt,
 		}:
 		default:
 		}

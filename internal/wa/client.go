@@ -718,13 +718,25 @@ func (c *Client) handleIncomingMessage(evt *events.Message) {
 	// chance to receive this bubble regardless of whether the legacy runner
 	// collector is active. Per-collector bot/timestamp filtering happens inside
 	// deliverToCollectors, so no runner behaviour changes.
+	// Download the media envelope once so both the legacy && live-chat paths
+	// share it, and so livechat can persist server-side images into its own
+	// livechat_media root (§6.5). downloadMediaIfPresent is a no-op for text.
+	liveText := ExtractMessageBubble(evt.Message)
+	var liveMediaBytes []byte
+	var liveMediaExt, liveMediaName string
+	if hasCollectorsRegistered(c) && strings.TrimSpace(liveText) != "" {
+		liveMediaBytes, liveMediaExt, liveMediaName = c.downloadMediaIfPresent(cli, evt.Message)
+	}
 	c.deliverToCollectors(&receivedEvent{
 		id:            evt.Info.ID,
 		when:          evt.Info.Timestamp,
 		chatUser:      evt.Info.Chat.User,
 		senderUser:    evt.Info.Sender.User,
 		senderAltUser: evt.Info.SenderAlt.User,
-		text:          ExtractMessageBubble(evt.Message),
+		text:          liveText,
+		mediaBytes:    liveMediaBytes,
+		mediaExt:      liveMediaExt,
+		mediaName:     liveMediaName,
 	})
 
 	if coll == nil {
@@ -739,13 +751,17 @@ func (c *Client) handleIncomingMessage(evt *events.Message) {
 		return
 	}
 
-	text := ExtractMessageBubble(evt.Message)
+	text := liveText
 	if strings.TrimSpace(text) == "" {
 		return
 	}
 
-	// Proactively download image/media bytes in background if present
-	mediaBytes, mediaExt, mediaName := c.downloadMediaIfPresent(cli, evt.Message)
+	// Reuse the media envelope we may have prepared for the live-chat registry
+	// (avoids downloading twice when a live session is also active).
+	mediaBytes, mediaExt, mediaName := liveMediaBytes, liveMediaExt, liveMediaName
+	if mediaBytes == nil && liveMediaName == "" {
+		mediaBytes, mediaExt, mediaName = c.downloadMediaIfPresent(cli, evt.Message)
+	}
 
 	select {
 	case coll.ch <- collectedBubble{
