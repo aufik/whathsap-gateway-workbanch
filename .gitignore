@@ -20,3 +20,5 @@ wa-bot-tester
 
 # Windows metadata artifact
 *:Zone.Identifier
+# Pre-work backups for the live-chat module (local only, may contain .env copy + user data)
+data/backups_secure/livechat_pre_*/
