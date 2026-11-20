@@ -57,6 +57,12 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, in SessionInput
 	if ids == nil {
 		ids = []int64{}
 	}
+	// Every referenced asset must belong to the caller; otherwise a leaked ID
+	// from another tenant would be attached to this session's Excel summary and
+	// later sent to the bot as if it were the caller's own file.
+	if err := s.VerifyOwnership(ctx, userID, ids); err != nil {
+		return Session{}, err
+	}
 	row := s.db.QueryRowContext(ctx, `
 		INSERT INTO livechat.sessions (
 			user_id, device_uuid, wa_phone, bot_phone, title, report_text,
@@ -472,6 +478,61 @@ func (s *Store) GetAsset(ctx context.Context, userID, assetID int64) (Asset, err
 	}
 	a.Kind = AssetKind(kind)
 	return a, nil
+}
+
+// VerifyOwnership reports whether every asset id belongs to userID. It is the
+// gate used before a session's asset_ids (and again before sending) so another
+// tenant's asset can never be attached or transmitted on this session.
+func (s *Store) VerifyOwnership(ctx context.Context, userID int64, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if userID <= 0 {
+		return ErrNotFound
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id FROM livechat.assets WHERE user_id = $1 AND id = ANY($2)`,
+		userID, pq.Array(ids))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	found := make(map[int64]struct{}, len(ids))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		found[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, ok := found[id]; !ok {
+			return fmt.Errorf("aset id %d bukan milik pengguna", id)
+		}
+	}
+	return nil
+}
+
+// findAssetBySHA looks up an existing row by (user_id, sha256). Used by the
+// upload path for dedup before touching disk.
+func (s *Store) findAssetBySHA(ctx context.Context, userID int64, sha string) (Asset, error) {
+	if userID <= 0 || len(sha) != 64 {
+		return Asset{}, ErrNotFound
+	}
+	var id int64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id FROM livechat.assets WHERE user_id = $1 AND sha256 = $2`,
+		userID, sha).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Asset{}, ErrNotFound
+	}
+	if err != nil {
+		return Asset{}, err
+	}
+	return s.GetAsset(ctx, userID, id)
 }
 
 // AssetInUse reports whether any session still references assetID. Selection is
