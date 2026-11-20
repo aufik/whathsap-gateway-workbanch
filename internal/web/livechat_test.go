@@ -125,7 +125,7 @@ func newLivechatTestEnv(t *testing.T) *livechatTestEnv {
 	if err != nil {
 		t.Fatalf("manager: %v", err)
 	}
-	srv.AttachLiveChat(store2, assets, mgr)
+	srv.AttachLiveChat(store2, assets, mgr, livechat.NewExporterAt(filepath.Join(t.TempDir(), "excel")))
 
 	env := &livechatTestEnv{db: db, server: srv, handler: srv.Handler(), store: store2}
 	return env
@@ -292,4 +292,84 @@ func itoa(n int64) string {
 		n /= 10
 	}
 	return string(buf[i:])
+}
+
+// TestLivechatExcelDownloadEndpoint verifies the download endpoint returns 404
+// until the exporter has produced data/users/{id}/livechat.xlsx, then streams
+// the file with the xlsx content type. The test t.Chdir's into a temp dir so
+// livechat.WorkbookPath(userID) resolves inside the temp root; data/users is
+// never touched.
+func TestLivechatExcelDownloadEndpoint(t *testing.T) {
+	db := openLivechatTestDB(t)
+	t.Cleanup(func() { db.Close() })
+	userID := int64(900405)
+	cleanupLivechatUser(t, db, userID)
+	t.Cleanup(func() { cleanupLivechatUser(t, db, userID) })
+
+	tmp := t.TempDir()
+	t.Chdir(tmp) // makes data/users/... resolve under tmp
+
+	cfg, err := config.Load(filepath.Join(tmp, ".env"))
+	if err != nil {
+		t.Fatalf("cfg: %v", err)
+	}
+	exStore := excel.NewEmptyStore()
+	aiEng := ai.NewEngine(cfg)
+	run := runner.NewRunner(cfg, exStore, aiEng, nil, func(string, any) {})
+	broker := NewSSEBroker()
+	srv := NewServer(cfg, exStore, aiEng, nil, run, broker, nil, AuthWiring{DB: &database.Store{}})
+	st := livechat.NewStore(db)
+	assets := livechat.NewAssetService(st, filepath.Join(tmp, "assets"))
+	exporter := livechat.NewExporter()
+	mgr, err := livechat.NewManager(livechat.ManagerOptions{
+		Store: st, Assets: assets, Responder: &livechat.Responder{},
+		WA:        errResolver{},
+		Settings:  func(ctx context.Context, uid int64) (model.HumanSettings, bool) { return model.HumanSettings{}, false },
+		MediaRoot: func(uid int64) string { return filepath.Join(tmp, "media") },
+		AssetRoot: func(uid int64) string { return filepath.Join(tmp, "assets") },
+		Exporter:  exporter,
+		Emitter:   livechat.NopEmitter{},
+	})
+	if err != nil {
+		t.Fatalf("manager: %v", err)
+	}
+	srv.AttachLiveChat(st, assets, mgr, exporter)
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := auth.WithSession(r.Context(), &database.Session{UserID: userID, Username: "t", Role: "tester"})
+		srv.Handler().ServeHTTP(w, r.WithContext(ctx))
+	})
+
+	// 1) No file yet → 404.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/livechat/excel/download", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 before any session, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	// 2) Export a finished session; endpoint must now return the bytes.
+	sess, err := st.CreateSession(context.Background(), userID, livechat.SessionInput{
+		DeviceUUID: "d", WAPhone: "1", BotPhone: "2", Title: "Unit test", ReportText: "x",
+		NamaPengadu: "n", TanggalKejadian: "2026-11-01", AlamatKejadian: "a",
+		TitikLokasiSrc: livechat.SourceEmpty, MaxTurns: 5, CategoryMode: livechat.ModeBenar,
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	sess.Status = livechat.StatusFinished
+	sess.TotalTurns = 3
+	sess.LastChatExcerpt = "tanya\njawab\ntiket #111111"
+	if err := exporter.Export(context.Background(), userID, sess); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, httptest.NewRequest("GET", "/api/livechat/excel/download", nil))
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 after export, got %d body=%s", rec2.Code, rec2.Body.String())
+	}
+	if ct := rec2.Header().Get("Content-Type"); !strings.Contains(ct, "spreadsheetml") {
+		t.Fatalf("bad content-type: %q", ct)
+	}
+	if rec2.Body.Len() < 1000 {
+		t.Fatalf("unexpectedly small workbook: %d bytes", rec2.Body.Len())
+	}
 }

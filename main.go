@@ -149,7 +149,7 @@ func main() {
 	if lc, lcErr := web.BuildLiveChat(ctx, dbStore.DB(), waPools, srvHandler.SettingsForUser, broker); lcErr != nil {
 		log.Printf("PERINGATAN: modul Live Chat gagal diinisialisasi: %v", lcErr)
 	} else if lc != nil {
-		srvHandler.AttachLiveChat(lc.Store, lc.Assets, lc.Manager)
+		srvHandler.AttachLiveChat(lc.Store, lc.Assets, lc.Manager, lc.Exporter)
 		log.Printf("Live Chat Emulator aktif (schema livechat)")
 	}
 

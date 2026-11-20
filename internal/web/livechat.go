@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,10 +20,11 @@ import (
 // Every method receives the caller's user id from the session middleware; no
 // handler ever accepts a user id from the request body or query string.
 type livechatHandlers struct {
-	server  *Server
-	store   *livechat.Store
-	assets  *livechat.AssetService
-	manager *livechat.Manager
+	server   *Server
+	store    *livechat.Store
+	assets   *livechat.AssetService
+	manager  *livechat.Manager
+	exporter *livechat.Exporter
 }
 
 func (h *livechatHandlers) requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -353,6 +355,24 @@ func (h *livechatHandlers) handleAssetPreview(w http.ResponseWriter, r *http.Req
 	_, _ = io.Copy(w, rc)
 }
 
+// GET /api/livechat/excel/download → stream data/users/{id}/livechat.xlsx when
+// it exists. Never generates the file on demand (plan §9); trigger via the
+// engine finishing a session.
+func (h *livechatHandlers) handleExcelDownload(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUser(w, r)
+	if !ok {
+		return
+	}
+	path := livechat.WorkbookPath(userID)
+	if fi, err := os.Stat(path); err != nil || fi.IsDir() {
+		writeErr(w, http.StatusNotFound, errors.New("belum ada ringkasan live chat; jalankan minimal satu sesi"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", `attachment; filename="livechat.xlsx"`)
+	http.ServeFile(w, r, path)
+}
+
 // GET /api/livechat/events → SSE stream of engine updates for this user. The
 // engine already emits to the broker (engineEmitter adapter); we expose a
 // dedicated endpoint so the UI can filter to livechat events without scanning
@@ -424,15 +444,16 @@ func peekUserID(payload any) int64 {
 // AttachLiveChat wires the livechat manager + asset service into the server.
 // It is called from main.go after NewServer so the default server (used by
 // tests) keeps compiling unchanged.
-func (s *Server) AttachLiveChat(store *livechat.Store, assets *livechat.AssetService, manager *livechat.Manager) {
+func (s *Server) AttachLiveChat(store *livechat.Store, assets *livechat.AssetService, manager *livechat.Manager, exporter *livechat.Exporter) {
 	if store == nil || manager == nil {
 		return
 	}
 	s.livechat = &livechatHandlers{
-		server:  s,
-		store:   store,
-		assets:  assets,
-		manager: manager,
+		server:   s,
+		store:    store,
+		assets:   assets,
+		manager:  manager,
+		exporter: exporter,
 	}
 }
 

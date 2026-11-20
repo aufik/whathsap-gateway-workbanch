@@ -20,6 +20,7 @@ type Manager struct {
 	settings  SettingsProvider
 	mediaRoot func(userID int64) string
 	assetRoot func(userID int64) string
+	exporter  *Exporter
 	emitter   engineEmitter
 
 	mu     sync.Mutex
@@ -47,6 +48,7 @@ type ManagerOptions struct {
 	Settings  SettingsProvider
 	MediaRoot func(userID int64) string
 	AssetRoot func(userID int64) string
+	Exporter  *Exporter
 	Emitter   engineEmitter
 }
 
@@ -72,6 +74,7 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 		settings:  opts.Settings,
 		mediaRoot: opts.MediaRoot,
 		assetRoot: opts.AssetRoot,
+		exporter:  opts.Exporter,
 		emitter:   opts.Emitter,
 		active:    map[int64]*runHandle{},
 	}, nil
@@ -113,6 +116,7 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 		MediaRoot: m.mediaRoot(userID),
 		AssetRoot: m.assetRoot(userID),
 		Emitter:   m.emitter,
+		Exporter:  m.exporter,
 	}, sess)
 	if err != nil {
 		return Session{}, err

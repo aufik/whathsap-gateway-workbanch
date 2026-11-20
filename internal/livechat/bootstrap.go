@@ -24,9 +24,10 @@ type BootOptions struct {
 
 // BootstrapResult bundles everything main.go needs to wire to the server.
 type BootstrapResult struct {
-	Store   *Store
-	Assets  *AssetService
-	Manager *Manager
+	Store    *Store
+	Assets   *AssetService
+	Manager  *Manager
+	Exporter *Exporter
 }
 
 // BootstrapLiveChat returns (nil, nil) when the schema is missing.
@@ -50,6 +51,7 @@ func BootstrapLiveChat(ctx context.Context, opts BootOptions) (*BootstrapResult,
 	if assetRoot == nil {
 		assetRoot = UserAssetsRoot
 	}
+	exporter := NewExporter()
 	mgr, err := NewManager(ManagerOptions{
 		Store:     store,
 		Assets:    assets,
@@ -60,12 +62,13 @@ func BootstrapLiveChat(ctx context.Context, opts BootOptions) (*BootstrapResult,
 		},
 		MediaRoot: opts.MediaRoot,
 		AssetRoot: assetRoot,
+		Exporter:  exporter,
 		Emitter:   opts.Emitter,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &BootstrapResult{Store: store, Assets: assets, Manager: mgr}, nil
+	return &BootstrapResult{Store: store, Assets: assets, Manager: mgr, Exporter: exporter}, nil
 }
 
 // schemaMissing is a cheap read that never writes. It treats both "schema not

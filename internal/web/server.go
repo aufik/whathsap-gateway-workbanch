@@ -196,6 +196,7 @@ staticFS, err := fs.Sub(s.publicFS, ".")
 		apiMux.HandleFunc("DELETE /api/livechat/assets/{id}", s.livechat.handleDeleteAsset)
 		apiMux.HandleFunc("GET /api/livechat/assets/{id}/preview", s.livechat.handleAssetPreview)
 		apiMux.HandleFunc("GET /api/livechat/events", s.livechat.handleEvents)
+		apiMux.HandleFunc("GET /api/livechat/excel/download", s.livechat.handleExcelDownload)
 	}
 
 	apiMux.Handle("GET /media/", http.HandlerFunc(s.handleMedia))
