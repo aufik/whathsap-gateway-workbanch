@@ -82,7 +82,8 @@ sasaran ke `public`.
 | `nama_pengadu` | VARCHAR(120) NOT NULL | Diisi acak saat form dibuka, dapat diganti pengguna |
 | `tanggal_kejadian` | DATE NOT NULL | Acak (1–14 hari terakhir), dapat diganti |
 | `alamat_kejadian` | TEXT NOT NULL | Acak dari daftar jalan/kecamatan Medan, dapat diganti |
-| `titik_lokasi` | VARCHAR(200) | Opsional, mis. `https://maps.google.com/?q=3.59,98.67` |
+| `titik_lokasi` | VARCHAR(200) | Terisi acak saat form dibuka (mis. `https://maps.google.com/?q=3.59,98.67`), **dapat diketik/diganti**; boleh dikosongkan manual |
+| `titik_lokasi_source` | VARCHAR(10) NOT NULL DEFAULT 'random' | `random` \| `manual` \| `empty` — jejak apakah penguji mengubahnya |
 | `asset_ids` | BIGINT[] | Daftar `livechat.assets.id` yang dipakai sesi ini |
 | `max_turns` | INT NOT NULL DEFAULT 40 | Batas pengaman giliran (dapat diubah per sesi/user) |
 | `category_mode` | VARCHAR(20) NOT NULL | `benar` \| `typo` \| `ngasal` \| `celah` |
@@ -216,8 +217,14 @@ created -> running -> (finished | failed | stopped | timeout)
      - `nama_pengadu` → nama acak Indonesia (mis. "Budi Santoso")
      - `tanggal_kejadian` → tanggal acak 1–14 hari terakhir (`YYYY-MM-DD`)
      - `alamat_kejadian` → alamat acak dari daftar kecamatan/jalan Kota Medan
+     - `titik_lokasi` → **acak koordinat/link maps Kota Medan** (mis.
+       `https://maps.google.com/?q=3.5952,98.6722`)
    - Semua field dapat **diketik ulang/diganti** oleh pengguna sebelum sesi dimulai.
-   - Nilai final disimpan di `sessions` (kolom baru, lihat §4.1) dan dipakai
+   - `titik_lokasi` juga boleh **dikosongkan manual**; jika dikosongkan, saat bot
+     meminta lokasi modul menjawab `lewat`.
+   - `titik_lokasi_source` mencatat apakah nilai berasal dari `random`, `manual`,
+     atau `empty` (untuk audit QC).
+   - Nilai final disimpan di `sessions` (kolom lihat §4.1) dan dipakai
      persis saat bot menanyakan hal tersebut — jadi isian deterministik, tidak
      berubah-ubah di tengah sesi.
 3. Sesi dibuat (`status=running`), emulator langsung tampil.
@@ -292,6 +299,20 @@ data/users/{user_id}/livechat_assets/{sha256[:2]}/{sha256}{ext}
    lampiran umumnya opsional).
 3. Mode `celah` boleh mengirim dokumen **tipe salah** (mis. PDF saat diminta
    foto) untuk menguji validasi bot — tetap dari aset milik penguji sendiri.
+   Batasi: maksimal **2 giliran** bertipe "salah berkas" per sesi, agar bot
+   tidak berhenti total dan sesi tetap bisa diselesaikan.
+
+**Aturan titik lokasi (`question_kind = titik_lokasi`):**
+
+1. Jika `sessions.titik_lokasi` terisi (acak atau diketik pengguna) → parsing
+   `lat,lng` dari link maps **atau** koordinat mentah, lalu kirim
+   `LocationMessage` sungguhan (bukan hanya teks URL).
+2. Jika `titik_lokasi_source = 'empty'` (penguji mengosongkan) → kirim teks
+   `lewat`.
+3. Jika koordinat gagal diparsing → fallback kirim teks `titik_lokasi` apa
+   adanya; catat di `turns.note` bahwa lokasi dikirim sebagai teks.
+4. Mode `celah` boleh mengirim koordinat **di luar Kota Medan** untuk menguji
+   validasi wilayah bot (maksimal 1 giliran per sesi).
 
 **Batas & keamanan:**
 
@@ -416,8 +437,10 @@ Tab baru **`Live Chat Emulator`** (aksen warna hijau WA, berbeda dari tab lain).
   - `Nama Pengadu` — terisi nama acak, mis. "Budi Santoso"
   - `Tanggal Kejadian` — terisi `YYYY-MM-DD` acak 1–14 hari terakhir
   - `Alamat Kejadian` — terisi jalan/kecamatan Medan acak
-  - Tombol kecil **"Acak ulang"** di tiap field.
-  - `Titik Lokasi` — opsional (link maps/koordinat), default kosong.
+  - `Titik Lokasi` — terisi **link maps acak Kota Medan**, dapat diketik/diganti,
+    boleh dikosongkan (status `empty` tercatat)
+  - Tombol kecil **"Acak ulang"** di tiap field, plus indikator kecil
+    `acak` / `diubah` / `kosong` di sebelah kanan label field
 - **Pemilih Berkas**: dropdown aset yang sudah diunggah; tombol
   **Unggah Berkas Baru** (image/pdf/docx ≤16 MB). Aset terpilih akan dipakai
   ketika bot meminta bukti/foto.
@@ -461,30 +484,39 @@ Tab baru **`Live Chat Emulator`** (aksen warna hijau WA, berbeda dari tab lain).
 | Berkas aset besar/berbahaya | Disk penuh / kirim file berbahaya | Batas 16 MB, total 500 MB/user, allowlist mimetype, validasi sha256 sebelum kirim |
 | Aset terkirim ke bot salah | Salah uji | Aset hanya dari milik user sendiri + ditautkan eksplisit ke sesi (`asset_ids`) |
 | Berkas terhapus padahal dipakai | Sesi gagal kirim | Hapus aset ditolak bila `asset_ids` masih mereferensikannya |
+| Koordinat gagal diparsing | Lokasi tidak terkirim | Fallback kirim teks apa adanya + catat di `turns.note` |
+| Field acak berubah di tengah sesi | Bot menerima data tidak konsisten, pengaduan gagal | Nilai acak dihitung **sekali** saat sesi dibuat & disimpan di `sessions`, tidak pernah diacak ulang di loop |
 
 ---
 
-## 13. Tahapan Implementasi (saat disetujui)
+## 13. Tahapan Implementasi
 
-1. **Backup & baseline**
-   - Backup `data/users/{id}/workbook.xlsx`, `workbook.metrics.json`, `.env`.
-   - Pastikan `go test ./...` hijau sebelum mulai.
-2. **Migration schema `livechat`** (DDL saja, dieksekusi **setelah persetujuan**)
-3. **`internal/livechat/model.go` + `store.go`** — CRUD ke schema
-4. **`assets.go`** — simpan aset content-addressed + validasi
-5. **`internal/wa`** — registry kolektor + `SendMedia`/`SendLocation` (aditif, unit test)
-6. **`detector.go` + `responder.go`** — unit test untuk semua `question_kind`
-   dan semua `category_mode`
-7. **`engine.go` + `manager.go`** — state machine + ritme manusia
-8. **`internal/web/livechat.go`** — REST + SSE + media + assets
-9. **`public/`** — tab, emulator, riwayat sesi, pemilih berkas, styling
-10. **`excel.go`** — ringkasan per sesi + endpoint download
-11. **Verifikasi**
-    - `go build ./...`, `go vet ./...`, `go test -count=1 ./...`
-    - `node --check public/livechat.js`
-    - Uji manual: 1 sesi mode `benar` end-to-end dengan 1 WA nyata
-    - Uji manual: 1 sesi dengan kirim berkas (image) ketika bot meminta bukti
-    - Pastikan sheet/tabel lama **tidak berubah** (bandingkan checksum workbook)
+> Urutan ini dirancang agar setiap langkah **dapat diverifikasi sendiri**,
+> dan tidak ada langkah yang menyentuh data uji lama.
+
+| # | Langkah | Bukti selesai (Definition of Done) |
+|---|---|---|
+| 0 | **Backup & baseline** — salin `data/users/*/workbook.xlsx`, `*.metrics.json`, `.env`, dan `git diff` bersih | folder `data/backups_secure/livechat_pre_*` ada; `go test ./...` hijau |
+| 1 | **Migration schema `livechat`** (4 tabel + indeks, DDL aditif saja) | `\dt livechat.*` menampilkan 4 tabel; `\dt public.*` **tidak berubah** |
+| 2 | **`model.go` + `store.go`** — CRUD sesi/pesan/turn/aset | unit test CRUD (insert, list per user, cascade delete) |
+| 3 | **`assets.go`** — content-addressed storage + validasi mimetype/ukuran/sha256 | unit test: upload duplikat tidak menambah file; mimetype salah ditolak |
+| 4 | **`internal/wa`** — `collectors` registry + `SendMedia`/`SendLocation` (aditif) | unit test: kolektor runner lama masih berfungsi; 2 kolektor aktif tidak saling curi pesan |
+| 5 | **`detector.go` + `responder.go`** | unit test seluruh `question_kind` × seluruh `category_mode` (tabel uji) |
+| 6 | **`engine.go` + `manager.go`** — state machine, ritme manusia, kondisi selesai | unit test: berhenti saat kata kunci selesai, `timeout` di `max_turns`, `failed` saat disconnect |
+| 7 | **`internal/web/livechat.go`** — REST + SSE + assets | test endpoint (401 tanpa sesi, isolasi antar user) |
+| 8 | **`public/livechat.js` + tab + styling** | `node --check`; render 1–3 kartu; field acak + tombol acak ulang |
+| 9 | **`excel.go`** — ringkasan per sesi + endpoint download | file `livechat.xlsx` terbuat; isi baris sesuai sesi; download tanpa generate ulang |
+| 10 | **Verifikasi akhir** | `go build ./...`, `go vet ./...`, `go test -count=1 ./...`, uji manual 1 sesi `benar` + 1 sesi dengan berkas; checksum `workbook.xlsx` lama **identik** |
+
+### 13.1 Aturan kerja saat implementasi
+
+1. **Jangan** menjalankan migration ke database tanpa persetujuan eksplisit.
+2. **Jangan** mengubah `internal/runner`, `internal/excel`, atau tabel `public.*`.
+3. Semua perubahan pada `internal/wa` harus **aditif** dan disertai unit test
+   pembuktian bahwa alur uji Bank/OOB/Stress tetap berjalan.
+4. Setiap langkah diakhiri commit terpisah agar mudah di-*rollback*.
+5. Bila ada kegagalan test yang tidak berhubungan, **laporkan** — jangan
+   memperbaikinya dalam scope modul ini.
 
 ---
 
@@ -495,14 +527,24 @@ Tab baru **`Live Chat Emulator`** (aksen warna hijau WA, berbeda dari tab lain).
 | 1 | Nama schema: **`livechat`** | ✅ Dikunci |
 | 2 | Batas pengaman giliran: **default 40**, dapat diubah per sesi/user (`max_turns`) | ✅ Dikunci |
 | 3 | Field `nama_pengadu`, `tanggal_kejadian`, `alamat_kejadian`: **terisi acak saat form dibuka**, dapat diketik ulang/diganti; nilai final dipakai konsisten selama sesi | ✅ Dikunci |
-| 4 | Pengiriman **image/document** dari aset milik sendiri (`data/users/{id}/livechat_assets/`), dikirim berulang tanpa upload ulang; juga mendukung `location` | ✅ Dikunci |
-| 5 | Sesi `failed`/`timeout`/`stopped` **tetap ditulis ke Excel**, termasuk cuplikan chat terakhir (kolom L) | ✅ Dikunci |
-| 6 | Laporan/pengaduan diinput **manual per sesi** | ✅ Dikunci |
-| 7 | Emulator **murni otomatis** (tanpa intervensi manual di tengah sesi, hanya Stop) | ✅ Dikunci |
-| 8 | Database: PostgreSQL **sama**, schema **terpisah** `livechat` | ✅ Dikunci |
+| 4 | `titik_lokasi`: **terisi acak**, dapat **diketik/diganti**, boleh **dikosongkan**; sumbernya dicatat (`random`/`manual`/`empty`) | ✅ Dikunci |
+| 5 | Pengiriman **image/document** dari aset milik sendiri (`data/users/{id}/livechat_assets/`), dikirim berulang tanpa upload ulang; juga mendukung `location` nyata (`LocationMessage`) | ✅ Dikunci |
+| 6 | Sesi `failed`/`timeout`/`stopped` **tetap ditulis ke Excel**, termasuk cuplikan chat terakhir (kolom L) | ✅ Dikunci |
+| 7 | Laporan/pengaduan diinput **manual per sesi** | ✅ Dikunci |
+| 8 | Emulator **murni otomatis** (tanpa intervensi manual di tengah sesi, hanya Stop) | ✅ Dikunci |
+| 9 | Database: PostgreSQL **sama**, schema **terpisah** `livechat` | ✅ Dikunci |
 
 ### 14.1 Pertanyaan yang Masih Terbuka
 
 1. **Retensi data**: sesi disimpan selamanya, atau ada batas (mis. 90 hari)?
 2. **Batas total aset per user**: 500 MB (usulan) — atau angka lain?
-3. **`titik_lokasi` default**: dikosongkan (usulan, karena opsional) atau ikut diacak?
+
+---
+
+## 15. Ringkasan Perubahan Dokumen (Riwayat Revisi)
+
+| Revisi | Perubahan |
+|---|---|
+| v1 | Rancangan awal: schema `livechat`, 3 tabel, engine loop, Excel ringkas |
+| v2 | Tambah tabel `livechat.assets`, kolom `msg_type`/`sent_media_json`, §6.5 kirim berkas, kolom Excel L/M, §14 keputusan dikunci |
+| v3 | `titik_lokasi` **acak + dapat diketik + boleh kosong** (`titik_lokasi_source`), aturan parsing koordinat & fallback, batas mode `celah`, §12 risiko konsistensi field acak, §13 tabel DoD per langkah + aturan kerja |
