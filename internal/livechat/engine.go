@@ -253,10 +253,12 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 	}
 	_ = note
 	e.emit("livechat_turn", map[string]any{
-		"sessionId": e.session.ID,
-		"turnNo":    e.turns,
-		"kind":      string(answer.Kind),
-		"ourAnswer": renderTurnAnswer(answer),
+		"sessionId":   e.session.ID,
+		"turnNo":      e.turns,
+		"kind":        string(answer.Kind),
+		"botQuestion": lastText,
+		"ourAnswer":   renderTurnAnswer(answer),
+		"matchStatus": answer.MatchStatus,
 	})
 
 	// 5. Advance turn counter in the header (best-effort).

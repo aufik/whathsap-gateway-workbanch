@@ -98,8 +98,13 @@ staticFS, err := fs.Sub(s.publicFS, ".")
 		}
 		// Protect dashboard shell: require session, redirect to /login.html when absent.
 		if s.auth.Manager != nil {
+			// livechat.js is the SPA module for the Live Chat tab. If it were
+			// gated, an HTML redirect would be served instead of JavaScript and
+			// the browser would fail to execute the module before login state
+			// settles (mirrors app.js, which is already public).
 			isPublicAsset := r.URL.Path == "/login.html" || r.URL.Path == "/app.js" ||
-				r.URL.Path == "/styles.css" || r.URL.Path == "/auth.css"
+				r.URL.Path == "/styles.css" || r.URL.Path == "/auth.css" ||
+				r.URL.Path == "/livechat.js"
 			if !isPublicAsset {
 				if _, err := s.auth.Manager.SessionFromRequest(r.Context(), r); err != nil {
 					http.Redirect(w, r, "/login.html", http.StatusFound)

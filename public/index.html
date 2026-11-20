@@ -158,6 +158,9 @@
       <button class="tab-btn" data-tab="tab-human-config" type="button">
         Pengaturan Perilaku Manusia &amp; SOP Anti-Ban
       </button>
+      <button class="tab-btn tab-btn-livechat" data-tab="tab-livechat" type="button">
+        Live Chat Emulator
+      </button>
     </nav>
 
     <!-- TAB 1: Official Question Bank & Interactive Testing -->
@@ -1171,6 +1174,13 @@
     </div>
   </div>
 
+  <!-- TAB 5: Live Chat Emulator (hidrasi oleh /livechat.js) -->
+  <section id="tab-livechat" class="tab-section">
+    <div id="livechatRoot" class="lc-root" aria-live="polite">
+      <noscript>Live Chat Emulator membutuhkan JavaScript aktif.</noscript>
+    </div>
+  </section>
+
   <!-- Lightbox Fullscreen Image Preview Modal -->
   <div id="lightboxModal" class="lightbox-modal hidden" role="dialog" aria-modal="true">
     <div class="lightbox-container">
@@ -1185,5 +1195,6 @@
 
   <div id="toastContainer" class="toast-container"></div>
   <script type="module" src="/app.js"></script>
+  <script type="module" src="/livechat.js"></script>
 </body>
 </html>
