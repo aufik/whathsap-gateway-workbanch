@@ -40,6 +40,12 @@ type engineConfig struct {
 	// AI is wired into the responder by the manager; not needed here.
 }
 
+// pendingPrompt captures one recognised bot question we should answer next.
+type pendingPrompt struct {
+	kind QuestionKind
+	text string
+}
+
 // Engine runs one Live Chat session to completion. One engine per session; use
 // the Manager to run several in parallel.
 type Engine struct {
@@ -53,6 +59,16 @@ type Engine struct {
 	excerpt  []string
 	outside  bool
 	autoStop bool
+	// fallbackCount counts consecutive turns where the detector could not
+	// classify the bot question. Each increment escalates the answer so the
+	// bot does not get stuck repeating the same question (manual test #1).
+	fallbackCount int
+	// pending holds recognised bot questions that arrived in the same window
+	// but have not been answered yet. The Pemko bot often asks 2-3 questions
+	// back-to-back ("kejadian?", then "apakah ingin membuat pengaduan?",
+	// then "nama?") before reading our reply; answering only the last bubble
+	// made the conversation loop (manual test #2). Queueing keeps order.
+	pending []pendingPrompt
 
 	stopOnce sync.Once
 	closed   bool
@@ -218,8 +234,19 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 		return true, e.closeWith(StatusFinished, reason, e.ticket)
 	}
 
-	// 3. Compose the answer for the latest bubble.
+	// 3. Compose the answer for the latest bubble. If the detector returned an
+	//    unknown/others kind we escalate through the essential fields so the
+	//    bot cannot loop forever on the same question.
 	kind := DetectQuestionKind(lastText)
+	if kind == KindLainnya || kind == KindUnknown {
+		escalated := NextFallback(e.fallbackCount)
+		if escalated != KindLainnya {
+			e.fallbackCount++
+			kind = escalated
+		}
+	} else {
+		e.fallbackCount = 0
+	}
 	assets, _ := e.cfg.Store.ListAssets(ctx, e.session.UserID)
 	assets = filterOwned(assets, e.session.AssetIDs)
 	rng := rand.New(rand.NewSource(time.Now().UnixNano() ^ int64(e.session.ID)))
@@ -416,8 +443,11 @@ func (e *Engine) closeWith(status Status, reason, ticket string) error {
 }
 
 func (e *Engine) isWAConnected() bool {
-	st := e.cfg.WA.Status()
-	return st.Connected && st.LoggedIn
+	// LoggedIn is the only hard signal: StreamReplaced / transient disconnects
+	// leave Connected=false briefly but whatsmeow reconnects automatically and
+	// LoggedIn stays true. LoggedOut (revoked device) flips LoggedIn=false and
+	// is what we actually want to treat as a failed session.
+	return e.cfg.WA.Status().LoggedIn
 }
 
 func (e *Engine) emit(eventType string, payload any) {
@@ -495,6 +525,77 @@ func renderTurnAnswer(a AnswerResult) string {
 	default:
 		return a.Text
 	}
+}
+
+// excerptWindow returns the raw text of each bubble in arrival order. It is
+// used for done-detection over the entire batch, not just the last one.
+func (e *Engine) excerptWindow(bubbles []CollectedBubble) []string {
+	out := make([]string, 0, len(bubbles))
+	for _, b := range bubbles {
+		if strings.TrimSpace(b.Text) != "" {
+			out = append(out, b.Text)
+		}
+	}
+	return out
+}
+
+// pickNextPrompt adds every recognised question in `bubbles` to the pending
+// queue, then pops the first one. Unknown bubbles with an active queue are
+// skipped so we exhaust known questions before escalating.
+func (e *Engine) pickNextPrompt(bubbles []CollectedBubble) (string, QuestionKind) {
+	for _, b := range bubbles {
+		kind := DetectQuestionKind(b.Text)
+		if kind == KindLainnya || kind == KindUnknown {
+			continue
+		}
+		// Avoid answering the same kind twice in a row when the bot repeats
+		// itself because it has not yet read our reply.
+		if n := len(e.pending); n > 0 && e.pending[n-1].kind == kind {
+			continue
+		}
+		e.pending = append(e.pending, pendingPrompt{kind: kind, text: b.Text})
+	}
+	if len(e.pending) == 0 {
+		return "", KindLainnya
+	}
+	head := e.pending[0]
+	e.pending = e.pending[1:]
+	// When the bot has clearly moved to a follow-up question, drop anything
+	// before it that would be stale (e.g. the initial "masalah apa?" greeting
+	// is no longer relevant once the bot asks for the name).
+	e.trimStale(head.kind)
+	return head.text, head.kind
+}
+
+// trimStale keeps only the questions that come after `current` in the
+// essential order; earlier ones were already answered by the bot's own flow.
+func (e *Engine) trimStale(current QuestionKind) {
+	order := map[QuestionKind]int{
+		KindIsiLaporan: 1, KindKonfirmasi: 2, KindNama: 3,
+		KindTanggal: 4, KindTitikLokasi: 5, KindAlamat: 6, KindBerkas: 7,
+	}
+	cur, ok := order[current]
+	if !ok {
+		return
+	}
+	kept := e.pending[:0]
+	for _, p := range e.pending {
+		if idx, ok := order[p.kind]; ok && idx > cur {
+			kept = append(kept, p)
+		}
+	}
+	e.pending = kept
+}
+
+// legacyLastText returns the last non-empty bubble; used as bot_question when
+// the escalation path produces an answer without a recognised question.
+func legacyLastText(bubbles []CollectedBubble) string {
+	for i := len(bubbles) - 1; i >= 0; i-- {
+		if strings.TrimSpace(bubbles[i].Text) != "" {
+			return bubbles[i].Text
+		}
+	}
+	return ""
 }
 
 func filterOwned(assets []Asset, ids []int64) []Asset {

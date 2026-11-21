@@ -28,26 +28,46 @@ var kindRules = []struct {
 	kind     QuestionKind
 	patterns []string
 }{
+	// Konfirmasi first: the bot's summary confirmation mentions "lampiran",
+	// "alamat", and "tanggal" inside the recap, so it must win over the
+	// per-field matchers when the question is "...ringkasan aduan di atas
+	// sudah sesuai untuk dikirim?".
+	{KindKonfirmasi, []string{
+		"apakah anda ingin", "apakah sudah benar", "ya/tidak", "konfirmasi",
+		"benar? (ya/tidak)", "ringkasan aduan", "sudah sesuai untuk dikirim",
+		"ketik batal", "ingin dikirim",
+		"pengaduan mengenai hal", "aduan mengenai hal",
+	}},
 	{KindTitikLokasi, []string{
-		"titik lokasi", "koordinat", "tautan peta", "link maps", "lokasi kejadian", "share lokasi",
+		"titik lokasi", "koordinat", "tautan peta", "link maps",
+		"lokasi kejadian", "share lokasi", "tautan google", "google maps",
+		"titik koordinat",
 	}},
 	{KindTanggal, []string{
-		"tanggal kejadian", "format: yyyy-mm-dd", "format yyyy-mm-dd", "kapan kejadian", "tanggal peristiwa",
+		"tanggal kejadian", "format: yyyy-mm-dd", "format yyyy-mm-dd",
+		"kapan kejadian", "tanggal peristiwa", "kapan kejadiannya",
+		"kapan kejadiannya terjadi", "kapan terjadinya",
 	}},
 	{KindNama, []string{
 		"isi nama", "nama lengkap", "nama pengadu", "siapa nama", "nama pelapor",
+		"boleh diinfokan nama", "diinfokan nama", "nama anda",
 	}},
 	{KindAlamat, []string{
-		"alamat kejadian", "alamat lengkap", "isi alamat", "dimana alamat", "di mana alamat",
+		"alamat kejadian", "alamat lengkap", "isi alamat", "dimana alamat",
+		"di mana alamat", "alamatnya",
 	}},
 	{KindBerkas, []string{
-		"unggah", "upload", "lampirkan", "kirim foto", "kirimkan foto", "kirim dokumen", "bukti foto", "bukti",
+		"unggah", "upload", "lampirkan", "kirim foto", "kirimkan foto",
+		"kirim dokumen", "bukti foto", "bukti",
+		"kirim lampiran", "lampiran terkait", "foto atau dokumen",
+		"lampiran berkas", "kirim berkas",
 	}},
 	{KindIsiLaporan, []string{
-		"isi laporan", "tuliskan aduan", "isi pengaduan", "tulis pengaduan", "ceritakan pengaduan", "laporan pengaduan",
-	}},
-	{KindKonfirmasi, []string{
-		"apakah anda ingin", "apakah sudah benar", "ya/tidak", "konfirmasi", "benar? (ya/tidak)",
+		"isi laporan", "tuliskan aduan", "isi pengaduan", "tulis pengaduan",
+		"ceritakan pengaduan", "laporan pengaduan",
+		"dijelaskan lebih dulu kejadian", "kejadian atau masalah",
+		"masalah yang ingin disampaikan", "kejadian yang ingin disampaikan",
+		"jelaskan kejadian", "jelaskan masalah",
 	}},
 }
 
@@ -68,6 +88,25 @@ var doneSignals = []string{
 
 var ticketRe = regexp.MustCompile(`#\s?([0-9]{5,6})\b`)
 
+// answerFallbackEscalation is used when the bot took more turns than we could
+// classify (last line was "lainnya"). We progressively fill laporan -> nama ->
+// tanggal so the bot can move on instead of repeating the same question.
+var answerFallbackEscalation = []QuestionKind{
+	KindIsiLaporan, KindNama, KindTanggal, KindAlamat, KindTitikLokasi,
+}
+
+// NextFallback returns the next best kind to answer when a bot turn was not
+// classified. reported is how many times we already fell back in this session.
+func NextFallback(reported int) QuestionKind {
+	if reported < 0 {
+		reported = 0
+	}
+	if reported >= len(answerFallbackEscalation) {
+		return KindLainnya
+	}
+	return answerFallbackEscalation[reported]
+}
+
 // NormalizeForDetect lowercases and collapses whitespace without removing
 // punctuation: the bot uses em-dashes, quotes, and ellipses that must survive.
 func NormalizeForDetect(s string) string {
@@ -75,8 +114,14 @@ func NormalizeForDetect(s string) string {
 	s = strings.NewReplacer(
 		"\u2013", "-", "\u2014", "-", "\u2019", "'", "\u201c", `"`, "\u201d", `"`,
 	).Replace(s)
+	// Strip WhatsApp markdown markers (*bold*, _italic_, `code`) and the
+	// zero-width padding bytes the bot sprinkles between bubbles. Without this,
+	// phrases like "*Kapan* kejadiannya" never match "kapan kejadian".
+	s = markdownStripper.Replace(s)
 	return strings.Join(strings.Fields(s), " ")
 }
+
+var markdownStripper = strings.NewReplacer("*", " ", "_", " ", "`", " ", "\u200b", " ", "\u200c", " ", "\u200d", " ")
 
 // DetectQuestionKind classifies one bot message.
 func DetectQuestionKind(botText string) QuestionKind {

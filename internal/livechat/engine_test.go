@@ -54,12 +54,13 @@ type fakeWA struct {
 	docs      int
 	locs      int
 	connected bool
+	loggedIn  bool
 	regErr    error
 	registers int
 }
 
 func newFakeWA(replies ...string) *fakeWA {
-	return &fakeWA{collector: &fakeCollector{replies: replies}, connected: true}
+	return &fakeWA{collector: &fakeCollector{replies: replies}, connected: true, loggedIn: true}
 }
 
 func (f *fakeWA) SendText(_ context.Context, _ string, text string) error {
@@ -105,7 +106,19 @@ func (f *fakeWA) RegisterCollector(_ string) (ReplyCollector, error) {
 func (f *fakeWA) Status() model.WAStatus {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return model.WAStatus{Connected: f.connected, LoggedIn: f.connected}
+	return model.WAStatus{Connected: f.connected, LoggedIn: f.loggedIn}
+}
+func (f *fakeWA) setDisconnectedOnly() {
+	f.mu.Lock()
+	f.connected = false
+	f.loggedIn = true
+	f.mu.Unlock()
+}
+func (f *fakeWA) setLoggedOut() {
+	f.mu.Lock()
+	f.connected = false
+	f.loggedIn = false
+	f.mu.Unlock()
 }
 func (f *fakeWA) setConnected(v bool) {
 	f.mu.Lock()
@@ -242,7 +255,7 @@ func TestEngineFailsOnDisconnect(t *testing.T) {
 	st, _, uid := engineTestDeps(t)
 	sess := newTestSession(t, st, uid, ModeBenar, 10)
 	fake := newFakeWA("Silakan isi nama lengkap", "Alamat?")
-	fake.collector.onWait = func() { fake.setConnected(false) }
+	fake.collector.onWait = func() { fake.setLoggedOut() }
 	eng := newTestEngine(t, sess, fake, st)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -367,5 +380,50 @@ func TestEngineTriggersCooldown(t *testing.T) {
 	}
 	if cooldowns == 0 {
 		t.Fatalf("expected at least one cooldown sleep (>=400ms), got sleeps=%v", sleeps)
+	}
+}
+
+// TestEngineEscalatesWhenKindUnknown drives the loop with replies the detector
+// cannot classify and asserts the turns progress through the essential fields.
+func TestEngineEscalatesWhenKindUnknown(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	sess := newTestSession(t, st, uid, ModeBenar, 5)
+	fake := newFakeWA("Halo kak", "Terima kasih", "Lanjut pak", "Detail tiket belum ada")
+	eng := newTestEngine(t, sess, fake, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = eng.Run(ctx)
+
+	detail, _ := st.GetSessionDetail(context.Background(), uid, sess.ID)
+	kinds := make([]string, 0, len(detail.Turns))
+	for _, tr := range detail.Turns {
+		kinds = append(kinds, tr.QuestionKind)
+	}
+	if len(kinds) < 3 {
+		t.Fatalf("expected >=3 audit turns, got %v", kinds)
+	}
+	// First three fallbacks in order (laporan, nama, tanggal).
+	want := []string{string(KindIsiLaporan), string(KindNama), string(KindTanggal)}
+	for i, w := range want {
+		if kinds[i] != w {
+			t.Fatalf("turn %d kind=%q, want %q (all=%v)", i, kinds[i], w, kinds)
+		}
+	}
+}
+
+// TestEngineStreamReplacedKeepsRunning: Connected=false + LoggedIn=true must
+// be treated as "still connected", matching whatsmeow's StreamReplaced event
+// (the session is auto-restored; only LoggedOut means dead). This is pure
+// predicate testing to avoid racing the fast fake's send timing.
+func TestEngineStreamReplacedKeepsRunning(t *testing.T) {
+	fake := newFakeWA()
+	fake.setDisconnectedOnly()
+	eng := &Engine{cfg: engineConfig{WA: fake}}
+	if !eng.isWAConnected() {
+		t.Fatalf("Connected=false + LoggedIn=true must be connected from the engine's view")
+	}
+	fake.setLoggedOut()
+	if eng.isWAConnected() {
+		t.Fatalf("LoggedIn=false must fail")
 	}
 }

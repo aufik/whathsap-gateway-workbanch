@@ -99,3 +99,55 @@ func TestNormalizeForDetectHandlesUnicode(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// TestDetectBotGreetingAsIsiLaporan covers the real Pemko Medan phrasing
+// captured during the manual smoke test.
+func TestDetectBotGreetingAsIsiLaporan(t *testing.T) {
+	cases := []string{
+		"*Baik*, kami bantu. Boleh dijelaskan lebih dulu kejadian atau masalah yang ingin disampaikan?",
+		"Boleh dijelaskan lebih dulu kejadian yang ingin disampaikan?",
+		"Silakan jelaskan masalah yang ingin disampaikan.",
+	}
+	for _, c := range cases {
+		if got := DetectQuestionKind(c); got != KindIsiLaporan {
+			t.Fatalf("Detect(%q) = %q, want isi_laporan", c, got)
+		}
+	}
+}
+
+func TestNextFallbackEscalates(t *testing.T) {
+	got := []QuestionKind{NextFallback(0), NextFallback(1), NextFallback(2), NextFallback(3), NextFallback(4)}
+	want := []QuestionKind{KindIsiLaporan, KindNama, KindTanggal, KindAlamat, KindTitikLokasi}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("NextFallback(%d)=%q, want %q", i, got[i], want[i])
+		}
+	}
+	if NextFallback(99) != KindLainnya {
+		t.Fatalf("NextFallback exhausted should return KindLainnya")
+	}
+}
+
+// TestDetectRealBotPhrases uses the exact strings the Pemko Medan bot sent
+// during the manual WA smoke test so regressions in the classifier surface
+// before another live run is attempted.
+func TestDetectRealBotPhrases(t *testing.T) {
+	cases := []struct {
+		text string
+		want QuestionKind
+	}{
+		{"*Baik*, kami bantu. Boleh dijelaskan lebih dulu kejadian atau masalah yang ingin disampaikan?", KindIsiLaporan},
+		{"*Apakah* Anda ingin membuat pengaduan mengenai hal tersebut?", KindKonfirmasi},
+		{"*Baik*, detail kejadian dan alamat (depan pasar) sudah kami catat.\nBoleh diinfokan nama Anda?", KindNama},
+		{"*Kapan* kejadiannya terjadi?", KindTanggal},
+		{"*Boleh* kirim titik koordinat atau tautan Google Maps-nya? (opsional, boleh dilewati)", KindTitikLokasi},
+		{"*Silakan* kirim lampiran terkait kejadian, boleh foto atau dokumen (opsional, boleh dilewati)", KindBerkas},
+		{"*Untuk* *Lampiran Berkas*, silakan kirim berkas (foto atau dokumen) langsung ya. Jika tidak ada, ketik *lewat* untuk melanjutkan", KindBerkas},
+		{"*Apakah* ringkasan aduan di atas sudah sesuai untuk dikirim? Anda juga bisa ketik *batal* untuk membatalkan", KindKonfirmasi},
+	}
+	for _, c := range cases {
+		if got := DetectQuestionKind(c.text); got != c.want {
+			t.Fatalf("Detect(%q) = %q, want %q", c.text, got, c.want)
+		}
+	}
+}
