@@ -152,14 +152,14 @@
       <button class="tab-btn tab-btn-stress" data-tab="tab-stress" type="button">
         Sheet Terpisah: Uji Stress AI (<span id="tabCountStress">0</span>)
       </button>
+      <button class="tab-btn tab-btn-livechat" data-tab="tab-livechat" type="button">
+        Live Chat Emulator
+      </button>
       <button class="tab-btn" data-tab="tab-dashboard" type="button">
         Dashboard &amp; Ringkasan OPD
       </button>
       <button class="tab-btn" data-tab="tab-human-config" type="button">
         Pengaturan Perilaku Manusia &amp; SOP Anti-Ban
-      </button>
-      <button class="tab-btn tab-btn-livechat" data-tab="tab-livechat" type="button">
-        Live Chat Emulator
       </button>
     </nav>
 
@@ -434,7 +434,14 @@
       </div>
     </section>
 
-    <!-- TAB 4: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
+  <!-- TAB 4: Live Chat Emulator (hidrasi oleh /livechat.js) -->
+  <section id="tab-livechat" class="tab-section">
+    <div id="livechatRoot" class="lc-root" aria-live="polite">
+      <noscript>Live Chat Emulator membutuhkan JavaScript aktif.</noscript>
+    </div>
+  </section>
+
+    <!-- TAB 5: Dashboard & OPD Summary (Matches Sheet Ringkasan) -->
     <section id="tab-dashboard" class="tab-section">
       <div class="card section-card">
         <div class="section-header-row">
@@ -461,7 +468,7 @@
       </div>
     </section>
 
-    <!-- TAB 4: Granular Human Behavior Settings & Anti-Ban SOP -->
+    <!-- TAB 6: Granular Human Behavior Settings & Anti-Ban SOP -->
     <section id="tab-human-config" class="tab-section">
       <div class="two-col-grid">
         <div class="card section-card">
@@ -1173,13 +1180,6 @@
       </div>
     </div>
   </div>
-
-  <!-- TAB 5: Live Chat Emulator (hidrasi oleh /livechat.js) -->
-  <section id="tab-livechat" class="tab-section">
-    <div id="livechatRoot" class="lc-root" aria-live="polite">
-      <noscript>Live Chat Emulator membutuhkan JavaScript aktif.</noscript>
-    </div>
-  </section>
 
   <!-- Lightbox Fullscreen Image Preview Modal -->
   <div id="lightboxModal" class="lightbox-modal hidden" role="dialog" aria-modal="true">
