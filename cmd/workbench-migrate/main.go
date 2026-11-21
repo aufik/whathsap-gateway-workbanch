@@ -48,9 +48,11 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	if *apply && *dryRun {
-		fmt.Fprintln(os.Stderr, "pilih salah satu: -dry-run (default) atau -apply")
-		os.Exit(2)
+	// -apply secara eksplisit mengalahkan default -dry-run=true, agar operator
+	// tidak perlu mengetik dua flag untuk menulis. Bila keduanya diberikan
+	// bersamaan dengan -dry-run=false, tidak ada konflik.
+	if *apply {
+		*dryRun = false
 	}
 
 	roots := []string(mediaRoots)
