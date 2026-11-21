@@ -83,7 +83,7 @@ func TestTenantStoreSelectsBackend(t *testing.T) {
 // TestConfigWorkbenchFlag memastikan env WORKBENCH_DB dibaca dengan benar.
 func TestConfigWorkbenchFlag(t *testing.T) {
 	cases := map[string]bool{
-		"":      false,
+		"":      true, // default Tahap 12: data di database
 		"0":     false,
 		"false": false,
 		"1":     true,
@@ -92,7 +92,12 @@ func TestConfigWorkbenchFlag(t *testing.T) {
 		"on":    true,
 	}
 	for raw, want := range cases {
-		t.Setenv("WORKBENCH_DB", raw)
+		// Kosong berarti env tidak diset -> default dipakai.
+		if raw == "" {
+			t.Setenv("WORKBENCH_DB", " ")
+		} else {
+			t.Setenv("WORKBENCH_DB", raw)
+		}
 		cfg, err := config.Load("")
 		if err != nil {
 			t.Fatalf("Load: %v", err)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -425,5 +427,62 @@ func TestEngineStreamReplacedKeepsRunning(t *testing.T) {
 	fake.setLoggedOut()
 	if eng.isWAConnected() {
 		t.Fatalf("LoggedIn=false must fail")
+	}
+}
+
+// TestEngineDoesNotWriteLivechatFile memastikan engine TIDAK lagi menulis
+// livechat.xlsx ke disk saat sesi ditutup (Tahap 12). Ringkasan kini dibuat
+// on-demand dari database.
+func TestEngineDoesNotWriteLivechatFile(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	sess := newTestSession(t, st, uid, ModeBenar, 5)
+	fake := newFakeWA("Pengaduan Anda telah kami terima. Nomor tiket #123456")
+
+	// Arahkan output file ke direktori sementara bila (secara tidak sengaja)
+	// masih ada yang menulis, agar test bisa mendeteksinya tanpa menyentuh
+	// data/users milik user sungguhan.
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	cfg := engineConfig{
+		Store:     st,
+		WA:        fake,
+		Responder: &Responder{},
+		Settings:  fastSettings(),
+		AssetRoot: filepath.Join(dir, "assets"),
+		MediaRoot: filepath.Join(dir, "media"),
+		Emitter:   NopEmitter{},
+		// Exporter sengaja DIPASANG: engine harus tetap tidak memanggilnya.
+		Exporter: NewExporter(),
+	}
+	eng, err := newEngine(cfg, sess)
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := eng.Run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// Status harus finished di database (bukti data tersimpan).
+	detail, err := st.GetSessionDetail(context.Background(), uid, sess.ID)
+	if err != nil {
+		t.Fatalf("detail: %v", err)
+	}
+	if detail.Session.Status != StatusFinished {
+		t.Fatalf("status=%s, want finished", detail.Session.Status)
+	}
+
+	// Tidak boleh ada file yang dibuat di direktori kerja.
+	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		t.Fatalf("engine menulis file yang tidak diharapkan: %s", path)
+		return nil
+	}); err != nil {
+		t.Fatalf("walk: %v", err)
 	}
 }

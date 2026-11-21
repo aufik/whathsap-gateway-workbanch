@@ -104,7 +104,7 @@ func Load(envPath string) (*AppConfig, error) {
 		LLMBaseURL:           strings.TrimRight(getStr("LLM_BASE_URL", ""), "/"),
 		LLMAPIKey:            getStr("LLM_API_KEY", ""),
 		LLMModel:             getStr("LLM_MODEL", ""),
-		WorkbenchDB:          getBool("WORKBENCH_DB", false),
+		WorkbenchDB:          getBool("WORKBENCH_DB", true),
 		LLMTimeoutMs:         getInt("LLM_TIMEOUT_MS", 20000),
 		DatabaseURL:          getStr("DATABASE_URL", ""),
 		SessionSecret:        getStr("SESSION_SECRET", ""),

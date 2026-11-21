@@ -34,8 +34,9 @@ type engineConfig struct {
 	AssetRoot string
 	// Emitter is called with session_id on every meaningful phase change.
 	Emitter engineEmitter
-	// Exporter writes the summary row into livechat.xlsx once the session
-	// closes (all statuses, including failed/timeout/stopped per plan §9).
+	// Exporter adalah jalur lama yang menulis livechat.xlsx ke disk. Sejak
+	// Tahap 12 jalur ini TIDAK dipanggil: ringkasan dibuat on-demand dari
+	// database. Field dipertahankan agar rollback tetap mungkin.
 	Exporter *Exporter
 	// AI is wired into the responder by the manager; not needed here.
 }
@@ -425,14 +426,11 @@ func (e *Engine) closeWith(status Status, reason, ticket string) error {
 	excerpt := LastNExcerpt(e.excerpt, 3)
 	err := e.cfg.Store.FinishSession(context.Background(), e.session.UserID, e.session.ID, status, reason, ticket, excerpt)
 	_ = e.cfg.Store.UpdateSessionProgress(context.Background(), e.session.UserID, e.session.ID, e.turns, ticket)
-	if e.cfg.Exporter != nil {
-		// Read the authoritative header back so the Excel row reflects exactly
-		// what was persisted (idempotent upsert by session id).
-		if detail, derr := e.cfg.Store.GetSessionDetail(context.Background(), e.session.UserID, e.session.ID); derr == nil {
-			detail.Session.TotalTurns = e.turns
-			_ = e.cfg.Exporter.Export(context.Background(), e.session.UserID, detail.Session)
-		}
-	}
+	// Ringkasan Live Chat TIDAK lagi ditulis ke disk. Seluruh data sudah
+	// tersimpan di schema livechat, dan file livechat.xlsx dibuat on-demand
+	// saat tombol Download ditekan (GenerateExcel, Tahap 11).
+	// ExportConfig tetap ada di engine agar jalur lama bisa diaktifkan kembali
+	// bila diperlukan; saat ini sengaja tidak dipanggil.
 	e.emit("livechat_status", map[string]any{
 		"sessionId": e.session.ID,
 		"status":    string(status),
