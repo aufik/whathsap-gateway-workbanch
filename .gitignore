@@ -22,6 +22,7 @@ wa-bot-tester
 *:Zone.Identifier
 # Pre-work backups for the live-chat module (local only, may contain .env copy + user data)
 data/backups_secure/livechat_pre_*/
+data/backups_secure/workbench_pre_*/
 
 # Live Chat Emulator runtime artifacts (per-user, generated while testing)
 data/users/*/livechat.xlsx
