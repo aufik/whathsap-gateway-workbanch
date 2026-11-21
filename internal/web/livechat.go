@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,12 @@ type livechatHandlers struct {
 	assets   *livechat.AssetService
 	manager  *livechat.Manager
 	exporter *livechat.Exporter
+}
+
+// hasDB tells handlers to skip DB-dependent helpers when the server was built
+// without a real database store (common in unit tests).
+func (h *livechatHandlers) hasDB() bool {
+	return h != nil && h.server != nil && h.server.auth.DB != nil && h.server.auth.DB.DB() != nil
 }
 
 func (h *livechatHandlers) requireUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -46,7 +53,7 @@ func (h *livechatHandlers) handleDevices(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if h.server.auth.DB == nil {
+	if !h.hasDB() {
 		writeErr(w, http.StatusServiceUnavailable, errors.New("database belum terhubung"))
 		return
 	}
@@ -148,6 +155,15 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 	if h.manager == nil {
 		writeErr(w, http.StatusServiceUnavailable, errors.New("manager live chat belum siap"))
 		return
+	}
+	// Mutual exclusion: the runner uses the same WhatsApp device. Starting a
+	// live chat during a batch would interleave bot replies and confuse both
+	// audit trails, so refuse up front instead of racing.
+	if h.server.runners != nil {
+		if st := h.server.tenantRunner(r.Context(), userID).Status(); st.State == "running" || st.State == "paused" {
+			writeErr(w, http.StatusConflict, errors.New("uji Bank/OOB/Stress sedang berjalan; hentikan dulu sebelum memulai live chat"))
+			return
+		}
 	}
 	var req startSessionRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -373,6 +389,38 @@ func (h *livechatHandlers) handleExcelDownload(w http.ResponseWriter, r *http.Re
 	http.ServeFile(w, r, path)
 }
 
+// GET /api/livechat/media/{sessionId}/{file} serves a bot attachment that the
+// engine persisted under data/users/{id}/livechat_media (plan §6.5). The
+// sessionId is verified against the caller, so a leaked file name from another
+// tenant returns 404 rather than disclosing bytes.
+func (h *livechatHandlers) handleIncomingMedia(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUser(w, r)
+	if !ok {
+		return
+	}
+	sid, err := strconv.ParseInt(r.PathValue("sessionId"), 10, 64)
+	if err != nil || sid <= 0 {
+		writeErr(w, http.StatusBadRequest, errors.New("id sesi tidak valid"))
+		return
+	}
+	if _, err := h.store.GetSessionDetail(r.Context(), userID, sid); errors.Is(err, livechat.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, err)
+		return
+	}
+	name := filepath.Base(strings.TrimSpace(r.PathValue("file")))
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		writeErr(w, http.StatusBadRequest, errors.New("nama berkas tidak valid"))
+		return
+	}
+	path := filepath.Join(livechat.UserMediaRoot(userID), name)
+	if fi, err := os.Stat(path); err != nil || fi.IsDir() {
+		writeErr(w, http.StatusNotFound, errors.New("berkas media tidak ditemukan"))
+		return
+	}
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.ServeFile(w, r, path)
+}
+
 // GET /api/livechat/events → SSE stream of engine updates for this user. The
 // engine already emits to the broker (engineEmitter adapter); we expose a
 // dedicated endpoint so the UI can filter to livechat events without scanning
@@ -392,7 +440,7 @@ func (h *livechatHandlers) handleEvents(w http.ResponseWriter, r *http.Request) 
 // shown in the UI. Returns "" when unknown; the session still works because the
 // runtime uses the WA pool client, not the phone string.
 func devicePhone(ctx context.Context, s *Server, userID int64, uuid string) string {
-	if s == nil || s.auth.DB == nil {
+	if s == nil || s.auth.DB == nil || s.auth.DB.DB() == nil || strings.TrimSpace(uuid) == "" {
 		return ""
 	}
 	devices, err := s.auth.DB.ListWADevices(ctx, userID)

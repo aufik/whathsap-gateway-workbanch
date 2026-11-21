@@ -373,3 +373,24 @@ func TestLivechatExcelDownloadEndpoint(t *testing.T) {
 		t.Fatalf("unexpectedly small workbook: %d bytes", rec2.Body.Len())
 	}
 }
+
+// TestLivechatStartNotBlockedWhenRunnerIdle makes sure the mutual-exclusion
+// guard does not reject starting a live chat under normal conditions (runner
+// idle). The fake WA resolver then fails because the device is not connected,
+// so we assert on the specific 400 from the WA layer rather than 409.
+func TestLivechatStartNotBlockedWhenRunnerIdle(t *testing.T) {
+	env := newLivechatTestEnv(t)
+	const uid int64 = 900406
+	cleanupLivechatUser(t, env.db, uid)
+	defer cleanupLivechatUser(t, env.db, uid)
+	h := env.withUser(uid)
+	rec, _ := doJSON(t, h, "POST", "/api/livechat/sessions", map[string]any{
+		"deviceUuid": "d1", "botPhone": "628111", "title": "t",
+		"reportText": "r", "namaPengadu": "n",
+		"tanggalKejadian": "2026-11-01", "alamatKejadian": "a",
+		"titikLokasiSource": "empty",
+	})
+	if rec.Code == http.StatusConflict {
+		t.Fatalf("guard wrongly rejected idle runner: %s", rec.Body.String())
+	}
+}

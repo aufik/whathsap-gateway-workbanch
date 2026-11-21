@@ -72,11 +72,20 @@ type humanizer struct {
 	sleeper  func(ctx context.Context, ms int) error
 }
 
+// humanSleeperHook lets unit tests observe sleeps without changing production
+// behaviour. It is nil in production and is set only inside tests.
+var humanSleeperHook func(ms int)
+
 func newHumanizer(settings model.HumanSettings) *humanizer {
 	return &humanizer{
 		settings: settings,
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
-		sleeper:  sleepCtx,
+		sleeper: func(ctx context.Context, ms int) error {
+			if humanSleeperHook != nil {
+				humanSleeperHook(ms)
+			}
+			return sleepCtx(ctx, ms)
+		},
 	}
 }
 

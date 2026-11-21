@@ -31,6 +31,10 @@ var summaryHeader = []string{
 type Exporter struct {
 	mu   sync.Mutex
 	root string // optional override for tests; empty = data/users
+	// AssetLabels maps asset ids to human labels so column M carries "Foto
+	// Jalan Rusak" instead of "asset#12". Nil is allowed: exporter falls back
+	// to ids without needing a DB round-trip.
+	AssetLabels func(ctx context.Context, userID int64, ids []int64) (map[int64]string, error)
 }
 
 // NewExporter returns a fresh exporter. Every Export reads the file from disk
@@ -41,6 +45,12 @@ func NewExporter() *Exporter { return &Exporter{} }
 // NewExporterAt is the test-friendly constructor that anchors writes to a custom
 // root directory (e.g. t.TempDir()). It never touches data/users in tests.
 func NewExporterAt(root string) *Exporter { return &Exporter{root: root} }
+
+// WithAssetLabels wires the asset-name resolver used for column M. Chainable.
+func (e *Exporter) WithAssetLabels(fn func(ctx context.Context, userID int64, ids []int64) (map[int64]string, error)) *Exporter {
+	e.AssetLabels = fn
+	return e
+}
 
 func (e *Exporter) pathFor(userID int64) string {
 	if e.root != "" {
@@ -109,6 +119,7 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 		row = e.nextRow(f, sheet)
 	}
 
+	labels := e.labelsFor(ctx, userID, session.AssetIDs)
 	values := []any{
 		row - 1, // No (1-based over data rows)
 		session.CreatedAt.Format("2006-01-02 15:04"),
@@ -122,7 +133,7 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 		session.TicketNo,
 		excelKeterangan(session),
 		session.LastChatExcerpt,
-		excelBerkasTerkirim(session.AssetIDs),
+		excelBerkasTerkirim(session.AssetIDs, labels),
 	}
 	for i, v := range values {
 		cell, _ := excelize.CoordinatesToCellName(i+1, row)
@@ -196,15 +207,34 @@ func excelKeterangan(s Session) string {
 	return strings.TrimSpace(s.EndReason)
 }
 
-func excelBerkasTerkirim(ids []int64) string {
+func excelBerkasTerkirim(ids []int64, labels map[int64]string) string {
 	if len(ids) == 0 {
 		return ""
 	}
 	parts := make([]string, 0, len(ids))
 	for _, id := range ids {
+		if labels != nil {
+			if name := strings.TrimSpace(labels[id]); name != "" {
+				parts = append(parts, name)
+				continue
+			}
+		}
 		parts = append(parts, fmt.Sprintf("asset#%d", id))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// labelsFor resolves the asset labels once per export; failures are non-fatal
+// so the summary still writes (falling back to asset#id).
+func (e *Exporter) labelsFor(ctx context.Context, userID int64, ids []int64) map[int64]string {
+	if e.AssetLabels == nil || len(ids) == 0 {
+		return nil
+	}
+	m, err := e.AssetLabels(ctx, userID, ids)
+	if err != nil {
+		return nil
+	}
+	return m
 }
 
 // writeAtomic mirrors internal/excel/store.go's writeWorkbookAtomically

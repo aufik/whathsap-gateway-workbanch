@@ -314,3 +314,58 @@ func TestEngineCelahLocationOncePerSession(t *testing.T) {
 		t.Fatalf("celah location must fire at most once per session, got %d", fake.locs)
 	}
 }
+
+// TestEngineTriggersCooldown proves the cooldown cadence fires. We lower the
+// delay to zero but keep the cooldown slow enough to be visible; the test
+// counts how many sleeps used a cooldown duration.
+func TestEngineTriggersCooldown(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	sess := newTestSession(t, st, uid, ModeBenar, 30)
+	replies := make([]string, 6)
+	for i := range replies {
+		replies[i] = "Silakan isi nama lengkap" // never triggers IsDone
+	}
+	fake := newFakeWA(replies...)
+
+	var sleeps []int
+	h, err := newEngine(engineConfig{
+		Store:     st,
+		WA:        fake,
+		Responder: &Responder{},
+		Settings: model.HumanSettings{
+			// Zero everywhere except the bits we are measuring.
+			PreThinkMinMs: 0, PreThinkMaxMs: 0,
+			TypingMsPerChar: 1, TypingMinMs: 1, TypingMaxMs: 1,
+			DelayMinMs: 1, DelayMaxMs: 1,
+			DistractionSpikePct: 0,
+			CooldownEveryMin:    2, CooldownEveryMax: 2,
+			CooldownMinMs: 500, CooldownMaxMs: 500, // visibly different from 1 ms
+			QuietWindowMs: 1, ReplyTimeoutMs: 400,
+		},
+		AssetRoot: t.TempDir(), MediaRoot: t.TempDir(), Emitter: NopEmitter{},
+	}, sess)
+	if err != nil {
+		t.Fatalf("engine: %v", err)
+	}
+	// Replace humanizer inside Run by intercepting the sleeper via package-level
+	// hook (tests only): we cannot access the humanizer inside Run() directly,
+	// so instead we run under fast ctx and read the counts via a wrapper that
+	// records any sleep >= 400 ms (only cooldown uses it here).
+	origHuman := humanSleeperHook
+	humanSleeperHook = func(ms int) { sleeps = append(sleeps, ms) }
+	defer func() { humanSleeperHook = origHuman }()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = h.Run(ctx)
+
+	cooldowns := 0
+	for _, ms := range sleeps {
+		if ms >= 400 {
+			cooldowns++
+		}
+	}
+	if cooldowns == 0 {
+		t.Fatalf("expected at least one cooldown sleep (>=400ms), got sleeps=%v", sleeps)
+	}
+}

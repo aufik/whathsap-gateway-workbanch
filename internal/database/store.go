@@ -48,7 +48,12 @@ func (s *Store) Close() error { return s.db.Close() }
 // DB exposes the shared PostgreSQL pool so isolated modules (e.g. livechat)
 // can run their own queries against explicit schemas without duplicating the
 // connection. Callers must never rely on search_path; qualify every table.
-func (s *Store) DB() *sql.DB { return s.db }
+func (s *Store) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
 
 func (s *Store) Migrate(ctx context.Context) error {
 	stmts := []string{
@@ -128,13 +133,17 @@ func (s *Store) SeedAdmin(ctx context.Context, username, password, fullName stri
 
 func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, username, full_name, role, created_at FROM users ORDER BY id`)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var users []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID,&u.Username,&u.FullName,&u.Role,&u.CreatedAt); err != nil { return nil, err }
-		users = append(users,u)
+		if err := rows.Scan(&u.ID, &u.Username, &u.FullName, &u.Role, &u.CreatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
 	}
 	return users, rows.Err()
 }
@@ -143,40 +152,50 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (Us
 	var u User
 	var hash string
 	err := s.db.QueryRowContext(ctx, `SELECT id,username,password_hash,full_name,role,created_at FROM users WHERE username=$1`, username).
-		Scan(&u.ID,&u.Username,&hash,&u.FullName,&u.Role,&u.CreatedAt)
-	if err != nil { return User{}, err }
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil { return User{}, errors.New("username atau password salah") }
+		Scan(&u.ID, &u.Username, &hash, &u.FullName, &u.Role, &u.CreatedAt)
+	if err != nil {
+		return User{}, err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+		return User{}, errors.New("username atau password salah")
+	}
 	return u, nil
 }
 
-func (s *Store) CreateUser(ctx context.Context, username,password,fullName,role string) (User,error) {
-	if role != "admin" { role = "tester" }
+func (s *Store) CreateUser(ctx context.Context, username, password, fullName, role string) (User, error) {
+	if role != "admin" {
+		role = "tester"
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil { return User{},err }
+	if err != nil {
+		return User{}, err
+	}
 	var u User
-	err = s.db.QueryRowContext(ctx, `INSERT INTO users (username,password_hash,full_name,role) VALUES ($1,$2,$3,$4) RETURNING id,username,full_name,role,created_at`, username,string(hash),fullName,role).
-		Scan(&u.ID,&u.Username,&u.FullName,&u.Role,&u.CreatedAt)
-	return u,err
+	err = s.db.QueryRowContext(ctx, `INSERT INTO users (username,password_hash,full_name,role) VALUES ($1,$2,$3,$4) RETURNING id,username,full_name,role,created_at`, username, string(hash), fullName, role).
+		Scan(&u.ID, &u.Username, &u.FullName, &u.Role, &u.CreatedAt)
+	return u, err
 }
 
 func (s *Store) SaveWorkbook(ctx context.Context, userID int64, fileName string, fileData, metricsData []byte) error {
-	if len(metricsData)==0 { metricsData=[]byte(`{}`) }
+	if len(metricsData) == 0 {
+		metricsData = []byte(`{}`)
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO user_workbooks (user_id,file_name,file_data,metrics_data) VALUES ($1,$2,$3,$4::jsonb)
-		ON CONFLICT (user_id) DO UPDATE SET file_name=excluded.file_name,file_data=excluded.file_data,metrics_data=excluded.metrics_data,updated_at=now()`, userID,fileName,fileData,string(metricsData))
+		ON CONFLICT (user_id) DO UPDATE SET file_name=excluded.file_name,file_data=excluded.file_data,metrics_data=excluded.metrics_data,updated_at=now()`, userID, fileName, fileData, string(metricsData))
 	return err
 }
 
-func (s *Store) LoadWorkbook(ctx context.Context, userID int64) (string,[]byte,[]byte,error) {
+func (s *Store) LoadWorkbook(ctx context.Context, userID int64) (string, []byte, []byte, error) {
 	var name string
 	var data []byte
 	var metrics json.RawMessage
-	err := s.db.QueryRowContext(ctx, `SELECT file_name,file_data,metrics_data FROM user_workbooks WHERE user_id=$1`,userID).Scan(&name,&data,&metrics)
-	return name,data,metrics,err
+	err := s.db.QueryRowContext(ctx, `SELECT file_name,file_data,metrics_data FROM user_workbooks WHERE user_id=$1`, userID).Scan(&name, &data, &metrics)
+	return name, data, metrics, err
 }
 
-func (s *Store) EnsureUserDirectory(userID int64) (string,error) {
-	path := fmt.Sprintf("data/users/%d",userID)
-	return path, os.MkdirAll(path,0755)
+func (s *Store) EnsureUserDirectory(userID int64) (string, error) {
+	path := fmt.Sprintf("data/users/%d", userID)
+	return path, os.MkdirAll(path, 0755)
 }
 
 func (s *Store) LoadWorkbookForUser(ctx context.Context, userID int64) (string, []byte, []byte, error) {

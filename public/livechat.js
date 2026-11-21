@@ -89,6 +89,7 @@ function renderShell() {
         <p>Menguji alur percakapan pengaduan Bot WhatsApp Pemko Medan secara otomatis. Satu kartu per nomor WA penguji (maks 3).</p>
       </div>
       <div class="lc-header-actions">
+        <button id="lcBtnDownloadExcel" type="button" class="btn btn-outline btn-sm">Download Excel</button>
         <button id="lcBtnReload" type="button" class="btn btn-outline btn-sm">Muat Ulang Riwayat</button>
       </div>
     </div>
@@ -334,26 +335,28 @@ function buildChatCard(state) {
     </div>
   `);
   const body = card.querySelector(".lc-chat-body");
-  state.messages.forEach((m) => body.appendChild(buildBubble(m)));
+  state.messages.forEach((m) => body.appendChild(buildBubble(m, s.id)));
   if (state.typing) body.appendChild(buildTypingIndicator());
   body.scrollTop = body.scrollHeight;
   return card;
 }
 
-function buildBubble(m) {
+function buildBubble(m, sessionId) {
   const kind = m.msgType || m.msg_type || "text";
   const dir = m.direction || "sent";
   const time = formatClock(m.sentAt || m.sent_at);
-  const inner = renderBubbleContent(m, kind);
+  const inner = renderBubbleContent(m, kind, sessionId);
   return h(`<div class="lc-bubble ${dir}">${inner}<span class="lc-time">${time}</span></div>`);
 }
-function renderBubbleContent(m, kind) {
+function renderBubbleContent(m, kind, sessionId) {
   const text = escapeText(m.body || m.bodyText || "");
   const media = parseMedia(m.mediaJson || m.media_json);
   if (kind === "image") {
     const file = media[0] && media[0].file;
-    const src = file ? assetPreviewURL(file) : "";
-    const img = src ? `<img class="lc-media-thumb" src="${src}" alt="lampiran" />` : "";
+    const src = file ? incomingMediaURL(sessionId, file) : "";
+    const img = src
+      ? `<img class="lc-media-thumb" src="${src}" alt="lampiran" onerror="this.style.display='none'" />`
+      : "";
     return (text ? `<span>${text}</span>` : "") + img;
   }
   if (kind === "document") {
@@ -598,7 +601,7 @@ function refreshCardAndScroll(sid) {
   const typing = body.querySelector(".lc-typing");
   if (typing) typing.remove();
   const last = state.messages[state.messages.length - 1];
-  if (last) body.appendChild(buildBubble(last));
+  if (last) body.appendChild(buildBubble(last, sid));
   if (state.typing) body.appendChild(buildTypingIndicator());
   body.scrollTop = body.scrollHeight;
 }
@@ -606,6 +609,29 @@ function refreshCardAndScroll(sid) {
 // --- events binding ---
 function bindEvents() {
   document.getElementById("lcBtnStart").addEventListener("click", startSession);
+  document.getElementById("lcBtnDownloadExcel").addEventListener("click", async () => {
+    try {
+      const res = await fetch("/api/livechat/excel/download", { credentials: "same-origin" });
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `HTTP ${res.status}`;
+        try { msg = JSON.parse(text).error || msg; } catch { /* raw */ }
+        toastLC("Belum ada ringkasan live chat: " + msg, true);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "livechat.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      toastLC("Gagal mengunduh Excel: " + err.message, true);
+    }
+  });
   document.getElementById("lcBtnReload").addEventListener("click", () => { loadDevices(); loadAssets(); loadSessions(); });
   document.getElementById("lcBtnRefreshHistory").addEventListener("click", loadSessions);
   document.getElementById("lcBtnUploadAsset").addEventListener("click", uploadAsset);
@@ -691,15 +717,15 @@ function parseMedia(raw) {
   if (!raw) return [];
   try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; } catch { return []; }
 }
-function assetPreviewURL(file) {
-  // Received bot media lives under data/users/{id}/livechat_media and is
-  // served by the existing /media/{user}/{file} route. LC.userId is loaded
-  // from /api/auth/me on boot so the path matches the current tenant.
-  if (!LC.userId) return "";
-  const parts = String(file || "").split("/");
+function incomingMediaURL(sessionId, file) {
+  // Bot media is stored under data/users/{id}/livechat_media and served by the
+  // session-scoped endpoint. Without a sessionId the URL is skipped (bubble
+  // still renders text, image just stays hidden).
+  if (!sessionId || !file) return "";
+  const parts = String(file).split("/");
   const base = parts[parts.length - 1];
   if (!base) return "";
-  return `/media/${LC.userId}/${encodeURIComponent(base)}`;
+  return `/api/livechat/media/${sessionId}/${encodeURIComponent(base)}`;
 }
 
 // The parent app may fire its tab switch through the same .tab-btn listener.

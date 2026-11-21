@@ -51,7 +51,23 @@ func BootstrapLiveChat(ctx context.Context, opts BootOptions) (*BootstrapResult,
 	if assetRoot == nil {
 		assetRoot = UserAssetsRoot
 	}
-	exporter := NewExporter()
+	exporter := NewExporter().WithAssetLabels(func(ctx context.Context, userID int64, ids []int64) (map[int64]string, error) {
+		out := make(map[int64]string, len(ids))
+		assets, err := store.ListAssets(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		want := make(map[int64]struct{}, len(ids))
+		for _, id := range ids {
+			want[id] = struct{}{}
+		}
+		for _, a := range assets {
+			if _, ok := want[a.ID]; ok {
+				out[a.ID] = a.Label
+			}
+		}
+		return out, nil
+	})
 	mgr, err := NewManager(ManagerOptions{
 		Store:     store,
 		Assets:    assets,

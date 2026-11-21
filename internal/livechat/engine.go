@@ -156,14 +156,15 @@ func (e *Engine) Run(parent context.Context) error {
 		}
 
 		turnsSince++
+		// Pass the real counter so the humanizer triggers the micro-break
+		// cadence (CooldownEveryMin..Max) exactly like the runner does; after a
+		// break the counter resets and a new target is drawn.
+		if _, derr := human.interTurnDelay(ctx, turnsSince, breakAt); derr != nil {
+			return e.handleStop("dihentikan oleh pengguna")
+		}
 		if turnsSince >= breakAt {
 			turnsSince = 0
 			breakAt = human.nextBreakGap()
-		} else {
-			_, derr := human.interTurnDelay(ctx, 0, breakAt)
-			if derr != nil {
-				return e.handleStop("dihentikan oleh pengguna")
-			}
 		}
 	}
 }

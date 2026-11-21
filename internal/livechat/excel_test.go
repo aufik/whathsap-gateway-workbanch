@@ -156,3 +156,29 @@ func TestExporterLeavesExistingWorkbookUntouched(t *testing.T) {
 		t.Fatalf("livechat.xlsx missing: %v", err)
 	}
 }
+
+// TestExporterUsesAssetLabels proves column M carries the label when the
+// resolver returns it and falls back to asset#id otherwise.
+func TestExporterUsesAssetLabels(t *testing.T) {
+	root := t.TempDir()
+	ex := NewExporterAt(root).WithAssetLabels(func(_ context.Context, _ int64, ids []int64) (map[int64]string, error) {
+		return map[int64]string{11: "Foto Jalan Rusak"}, nil
+	})
+	if err := ex.Export(context.Background(), 900502, Session{
+		ID: 1, UserID: 900502, WAPhone: "1", BotPhone: "1", Title: "x",
+		CategoryMode: ModeBenar, Status: StatusFinished, CreatedAt: time.Now(),
+		AssetIDs: []int64{11, 12},
+	}); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	f, err := excelize.OpenFile(filepath.Join(root, "900502", ExcelFileName))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+	rows, _ := f.GetRows("Ringkasan Live Chat")
+	got := rows[1][12] // column M
+	if !strings.Contains(got, "Foto Jalan Rusak") || !strings.Contains(got, "asset#12") {
+		t.Fatalf("expected labelled + fallback ids, got %q", got)
+	}
+}
