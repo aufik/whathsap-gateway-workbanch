@@ -798,7 +798,27 @@ ORDER BY bank_tested DESC;
 
 ---
 
-**Status: PLAN ONLY (v4) — tidak ada kode, DDL, atau data yang diubah.**
+**Status: SELESAI DIEKSEKUSI (v4) — Tahap 1 sampai 13.**
 
-Rencana ini siap dieksekusi. Menunggu persetujuan untuk mulai **Tahap 1
-(Backup & baseline)**.
+Ringkasan eksekusi:
+
+| Tahap | Hasil |
+|---|---|
+| 1 | Backup & baseline di `data/backups_secure/workbench_pre_20261121_115748/` |
+| 2 | Schema `workbench` (4 tabel) terpasang; public 5, livechat 4 tidak berubah |
+| 3 | Parser murni `excel.ParseBytes/ParseFile`; sidik jari parse identik |
+| 4 | Interface `workbench.Store` (25 method) + assert kompilasi |
+| 5 | ETL dry-run: 210 / 52 / 15 / 118 media |
+| 6 | ETL apply: PARITY OK, 0 perbedaan baris-per-baris |
+| 7 | `DBStore` + parity API pada data produksi (baris & summary identik) |
+| 8 | Generator Excel in-memory: 0 baris berbeda, 118 gambar ter-embed |
+| 9 | Template runtime 19 MB -> 59 KB; formula Ringkasan terjaga |
+| 10 | Wiring runner/web/main di balik flag `WORKBENCH_DB` |
+| 11 | Ringkasan Live Chat dari SQL, tanpa file |
+| 12 | Cut-over: default database, `livechat.xlsx` berhenti ditulis |
+| 13 | Verifikasi akhir G1–G8 di `stage13_final_verification.txt` |
+
+Status default: `WORKBENCH_DB=1` (data di PostgreSQL). Rollback: set `0`.
+
+Bukti verifikasi akhir tersimpan di
+`data/backups_secure/workbench_pre_20261121_115748/stage13_final_verification.txt`.
