@@ -25,6 +25,8 @@ type DBStore struct {
 	db     *sql.DB
 	userID int64
 	mu     sync.Mutex
+	// exportCfg dikonfigurasi lewat SetExportConfig (template + media roots).
+	exportCfg ExportConfig
 }
 
 // NewDBStore membuat store untuk satu user. db harus sudah terbuka dan schema
