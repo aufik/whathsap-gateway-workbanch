@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -288,193 +287,21 @@ func (s *Store) reloadLocked() error {
 }
 
 func (s *Store) parseWorkbookLocked(f *excelize.File) error {
-	idx, err := f.GetSheetIndex(SheetBank)
-	if err != nil || idx < 0 {
-		return fmt.Errorf("sheet %q tidak ditemukan di file Excel", SheetBank)
-	}
-
-	rawRows, err := f.GetRows(SheetBank)
+	res, err := parseFromFile(f, &MetricsBundle{
+		Bank:        s.bankMetrics,
+		OOB:         s.oobMetrics,
+		Stress:      s.stressMetrics,
+		BankMedia:   s.bankMedia,
+		OOBMedia:    s.oobMedia,
+		StressMedia: s.stressMedia,
+	}, s.filePath)
 	if err != nil {
-		return fmt.Errorf("read sheet %q: %w", SheetBank, err)
+		return err
 	}
-
-	parsed := make([]model.TestRow, 0, len(rawRows))
-	for i := 2; i < len(rawRows); i++ {
-		cols := rawRows[i]
-		getCol := func(c int) string {
-			if c < len(cols) {
-				return strings.TrimSpace(cols[c])
-			}
-			return ""
-		}
-
-		noStr := getCol(0)
-		opd := getCol(1)
-		questionRef := getCol(4)
-		if noStr == "" && opd == "" && questionRef == "" {
-			continue
-		}
-		no, err := strconv.Atoi(noStr)
-		if err != nil || no <= 0 {
-			no = len(parsed) + 1
-		}
-
-		row := model.TestRow{
-			No:            no,
-			ExcelRow:      i + 1,
-			OPD:           opd,
-			Kategori:      getCol(2),
-			StatusBank:    strings.ToLower(getCol(3)),
-			QuestionRef:   questionRef,
-			QuestionInput: getCol(5),
-			ExpectedReply: getCol(6),
-			ActualReply:   getCol(7),
-			Notes:         getCol(8),
-			ResultStatus:  normalizeResultStatus(getCol(9)),
-		}
-		if m, ok := s.bankMetrics[no]; ok {
-			row.Metrics = m
-		}
-		if media, ok := s.bankMedia[no]; ok {
-			row.MediaFiles = media
-		}
-		hydrateFlags(&row)
-		parsed = append(parsed, row)
-	}
-
-	if len(parsed) == 0 {
-		return errors.New("tidak ada baris pertanyaan yang valid pada sheet Bank Pertanyaan")
-	}
-
-	var opds []string
-	seenOPD := map[string]bool{}
-	if ringIdx, err := f.GetSheetIndex(SheetRingkasan); err == nil && ringIdx >= 0 {
-		if ringRows, err := f.GetRows(SheetRingkasan); err == nil {
-			for i := 2; i < len(ringRows); i++ {
-				if len(ringRows[i]) == 0 {
-					continue
-				}
-				name := strings.TrimSpace(ringRows[i][0])
-				if name != "" && !strings.EqualFold(name, "Total") && !strings.EqualFold(name, "Jumlah") && !seenOPD[name] {
-					seenOPD[name] = true
-					opds = append(opds, name)
-				}
-			}
-		}
-	}
-	for _, r := range parsed {
-		if r.OPD != "" && !seenOPD[r.OPD] {
-			seenOPD[r.OPD] = true
-			opds = append(opds, r.OPD)
-		}
-	}
-
-	// Parse separate SheetOutOfBank if present in workbook
-	var parsedOOB []model.OutOfBankRow
-	if oobIdx, err := f.GetSheetIndex(SheetOutOfBank); err == nil && oobIdx >= 0 {
-		if oobRaw, err := f.GetRows(SheetOutOfBank); err == nil {
-			for i := 2; i < len(oobRaw); i++ {
-				cols := oobRaw[i]
-				getCol := func(c int) string {
-					if c < len(cols) {
-						return strings.TrimSpace(cols[c])
-					}
-					return ""
-				}
-				probeQ := getCol(4)
-				baseQ := getCol(3)
-				if getCol(0) == "" && probeQ == "" && baseQ == "" {
-					continue
-				}
-				no := len(parsedOOB) + 1
-				if n, err := strconv.Atoi(getCol(0)); err == nil && n > 0 {
-					no = n
-				}
-				item := model.OutOfBankRow{
-					No:               no,
-					ExcelRow:         i + 1,
-					SourceRef:        getCol(1),
-					ScenarioType:     getCol(2),
-					BaseQuestion:     baseQ,
-					ProbeQuestion:    probeQ,
-					ExpectedBehavior: getCol(5),
-					ActualReply:      getCol(6),
-					HumanSummary:     getCol(7),
-					Notes:            getCol(8),
-					ResultStatus:     normalizeResultStatus(getCol(9)),
-					ForbiddenYear:    getCol(10),
-					ReferenceYear:    getCol(11),
-				}
-				if m, ok := s.oobMetrics[no]; ok {
-					item.Metrics = m
-					if item.HumanSummary == "" {
-						item.HumanSummary = FormatHumanMetricsSummary(m)
-					}
-				}
-				if media, ok := s.oobMedia[no]; ok {
-					item.MediaFiles = media
-				}
-				parsedOOB = append(parsedOOB, item)
-			}
-		}
-	}
-
-	// Parse separate SheetStress if present in workbook
-	var parsedStress []model.StressTestRow
-	if stressIdx, err := f.GetSheetIndex(SheetStress); err == nil && stressIdx >= 0 {
-		if stressRaw, err := f.GetRows(SheetStress); err == nil {
-			for i := 2; i < len(stressRaw); i++ {
-				cols := stressRaw[i]
-				getCol := func(c int) string {
-					if c < len(cols) {
-						return strings.TrimSpace(cols[c])
-					}
-					return ""
-				}
-				promptQ := getCol(2)
-				if getCol(0) == "" && promptQ == "" {
-					continue
-				}
-				no := len(parsedStress) + 1
-				if n, err := strconv.Atoi(getCol(0)); err == nil && n > 0 {
-					no = n
-				}
-				score := 0
-				if s, err := strconv.Atoi(getCol(9)); err == nil {
-					score = s
-				}
-				item := model.StressTestRow{
-					No:               no,
-					ExcelRow:         i + 1,
-					StressCategory:   getCol(1),
-					UserPromptQ:      promptQ,
-					IntentPurpose:    getCol(3),
-					ExpectedBehavior: getCol(4),
-					ActualReply:      getCol(5),
-					HumanSummary:     getCol(6),
-					Notes:            getCol(7),
-					ResultStatus:     normalizeResultStatus(getCol(8)),
-					PolitenessScore:  score,
-					HallucinationLvl: getCol(10),
-				}
-				if m, ok := s.stressMetrics[no]; ok {
-					item.Metrics = m
-					if item.HumanSummary == "" {
-						item.HumanSummary = FormatHumanMetricsSummary(m)
-					}
-				}
-				if media, ok := s.stressMedia[no]; ok {
-					item.MediaFiles = media
-				}
-				parsedStress = append(parsedStress, item)
-			}
-		}
-	}
-
-	s.rows = parsed
-	s.oobRows = parsedOOB
-	s.stressRows = parsedStress
-	s.opdOrder = opds
+	s.rows = res.Bank
+	s.oobRows = res.OOB
+	s.stressRows = res.Stress
+	s.opdOrder = res.OPDOrder
 	return nil
 }
 
