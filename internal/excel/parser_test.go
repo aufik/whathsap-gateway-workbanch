@@ -1,6 +1,7 @@
 package excel
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -108,5 +109,47 @@ func TestParseBytesWithoutMetrics(t *testing.T) {
 		if !reflect.DeepEqual(r.Metrics, zero) {
 			t.Fatalf("row %d has unexpected metrics without bundle", r.No)
 		}
+	}
+}
+
+// TestLoadMetricsFileReal captures the real sidecar shape used by user 2 so
+// the ETL (stage 5) can rely on it.
+func TestLoadMetricsFileReal(t *testing.T) {
+	path := filepath.Join("..", "..", "data", "users", "2", "workbook.metrics.json")
+	if _, err := os.Stat(path); err != nil {
+		t.Skip("metrics sidecar user 2 tidak tersedia")
+	}
+	b, err := LoadMetricsFile(path)
+	if err != nil {
+		t.Fatalf("LoadMetricsFile: %v", err)
+	}
+	if len(b.Bank) != 210 {
+		t.Fatalf("bank metrics: got %d want 210", len(b.Bank))
+	}
+	if len(b.OOB) != 52 {
+		t.Fatalf("oob metrics: got %d want 52", len(b.OOB))
+	}
+	if len(b.Stress) != 15 {
+		t.Fatalf("stress metrics: got %d want 15", len(b.Stress))
+	}
+	if len(b.BankMedia) != 104 {
+		t.Fatalf("bank media: got %d want 104", len(b.BankMedia))
+	}
+	if len(b.OOBMedia) != 14 {
+		t.Fatalf("oob media: got %d want 14", len(b.OOBMedia))
+	}
+	// stressMedia absent in this sidecar → must be an empty non-nil map.
+	if b.StressMedia == nil {
+		t.Fatalf("StressMedia must be non-nil empty map")
+	}
+}
+
+func TestLoadMetricsFileMissing(t *testing.T) {
+	b, err := LoadMetricsFile(filepath.Join(t.TempDir(), "nope.metrics.json"))
+	if err != nil {
+		t.Fatalf("missing file must not error: %v", err)
+	}
+	if b == nil || b.Bank == nil {
+		t.Fatalf("expected non-nil empty bundle")
 	}
 }

@@ -2,8 +2,10 @@ package excel
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -258,4 +260,55 @@ func parseFromFile(f *excelize.File, metrics *MetricsBundle, sourcePath string) 
 		Stress:   parsedStress,
 		OPDOrder: opds,
 	}, nil
+}
+
+// LoadMetricsFile membaca sidecar workbook.metrics.json (path apa adanya) dan
+// mengembalikan MetricsBundle siap pakai untuk ParseBytes/ParseFile. Missing
+// file menghasilkan bundle kosong tanpa error, sama seperti perilaku Store.
+//
+// Fungsi ini tidak mengubah file apa pun dan tidak menyentuh disk selain
+// membaca satu file JSON.
+func LoadMetricsFile(path string) (*MetricsBundle, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// Bundle kosong dengan map non-nil: pemanggil boleh mengindeks
+			// tanpa nil-check, sama seperti Store.loadMetricsSidecarLocked.
+			return &MetricsBundle{
+				Bank:        map[int]model.RowHumanMetrics{},
+				OOB:         map[int]model.RowHumanMetrics{},
+				Stress:      map[int]model.RowHumanMetrics{},
+				BankMedia:   map[int][]string{},
+				OOBMedia:    map[int][]string{},
+				StressMedia: map[int][]string{},
+			}, nil
+		}
+		return nil, err
+	}
+	var pm persistedMetricsFile
+	if err := json.Unmarshal(raw, &pm); err != nil {
+		return nil, fmt.Errorf("metrics %s tidak valid: %w", path, err)
+	}
+	return &MetricsBundle{
+		Bank:        nonNilMetrics(pm.Bank),
+		OOB:         nonNilMetrics(pm.OutOfBank),
+		Stress:      nonNilMetrics(pm.Stress),
+		BankMedia:   nonNilMedia(pm.BankMedia),
+		OOBMedia:    nonNilMedia(pm.OutOfBankMedia),
+		StressMedia: nonNilMedia(pm.StressMedia),
+	}, nil
+}
+
+func nonNilMetrics(m map[int]model.RowHumanMetrics) map[int]model.RowHumanMetrics {
+	if m == nil {
+		return map[int]model.RowHumanMetrics{}
+	}
+	return m
+}
+
+func nonNilMedia(m map[int][]string) map[int][]string {
+	if m == nil {
+		return map[int][]string{}
+	}
+	return m
 }
