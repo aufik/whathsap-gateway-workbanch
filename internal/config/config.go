@@ -29,6 +29,9 @@ type AppConfig struct {
 	InitialAdminUsername string
 	InitialAdminPassword string
 	InitialAdminFullName string
+	// WorkbenchDB memilih sumber data pengujian: false = file workbook
+	// (perilaku lama), true = schema workbench di PostgreSQL.
+	WorkbenchDB bool
 
 	Settings model.HumanSettings
 }
@@ -67,6 +70,19 @@ func Load(envPath string) (*AppConfig, error) {
 		return def
 	}
 
+	getBool := func(key string, def bool) bool {
+		raw := strings.ToLower(getStr(key, ""))
+		if raw == "" {
+			return def
+		}
+		switch raw {
+		case "1", "true", "yes", "on":
+			return true
+		case "0", "false", "no", "off":
+			return false
+		}
+		return def
+	}
 	getInt := func(key string, def int) int {
 		raw := getStr(key, "")
 		if raw == "" {
@@ -80,15 +96,16 @@ func Load(envPath string) (*AppConfig, error) {
 	}
 
 	cfg := &AppConfig{
-		EnvPath:      envPath,
-		Host:         getStr("HOST", "0.0.0.0"),
-		Port:         getInt("PORT", 3020),
-		ExcelFile:    getStr("EXCEL_FILE", "Uji-Bank-Pertanyaan-Programmer-4.xlsx"),
-		WASessionDB:  getStr("WA_SESSION_DB", "wa_session.db"),
-		LLMBaseURL:   strings.TrimRight(getStr("LLM_BASE_URL", ""), "/"),
-		LLMAPIKey:    getStr("LLM_API_KEY", ""),
-		LLMModel:     getStr("LLM_MODEL", ""),
-		LLMTimeoutMs: getInt("LLM_TIMEOUT_MS", 20000),
+		EnvPath:              envPath,
+		Host:                 getStr("HOST", "0.0.0.0"),
+		Port:                 getInt("PORT", 3020),
+		ExcelFile:            getStr("EXCEL_FILE", "Uji-Bank-Pertanyaan-Programmer-4.xlsx"),
+		WASessionDB:          getStr("WA_SESSION_DB", "wa_session.db"),
+		LLMBaseURL:           strings.TrimRight(getStr("LLM_BASE_URL", ""), "/"),
+		LLMAPIKey:            getStr("LLM_API_KEY", ""),
+		LLMModel:             getStr("LLM_MODEL", ""),
+		WorkbenchDB:          getBool("WORKBENCH_DB", false),
+		LLMTimeoutMs:         getInt("LLM_TIMEOUT_MS", 20000),
 		DatabaseURL:          getStr("DATABASE_URL", ""),
 		SessionSecret:        getStr("SESSION_SECRET", ""),
 		InitialAdminUsername: getStr("INITIAL_ADMIN_USERNAME", "superadmin_kominfo"),
@@ -142,6 +159,7 @@ func (c *AppConfig) ReloadFromDisk() error {
 	c.LLMAPIKey = fresh.LLMAPIKey
 	c.LLMModel = fresh.LLMModel
 	c.LLMTimeoutMs = fresh.LLMTimeoutMs
+	c.WorkbenchDB = fresh.WorkbenchDB
 	c.Settings = fresh.Settings
 	return nil
 }

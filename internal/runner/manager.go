@@ -5,9 +5,9 @@ import (
 
 	"whatshap-gateway/internal/ai"
 	"whatshap-gateway/internal/config"
-	"whatshap-gateway/internal/excel"
 	"whatshap-gateway/internal/model"
 	"whatshap-gateway/internal/wa"
+	"whatshap-gateway/internal/workbench"
 )
 
 type TenantEventSink func(userID int64, eventType string, payload any)
@@ -44,7 +44,7 @@ func NewManager(
 // ForUser returns the dedicated Runner for userID, instantiating it lazily
 // with its own scoped event sink and workbook dirty-callback.
 // If the store, pool, or settings have changed, they are refreshed on the runner.
-func (m *Manager) ForUser(userID int64, store *excel.Store, pool *wa.Pool, settings model.HumanSettings) *Runner {
+func (m *Manager) ForUser(userID int64, store workbench.Store, pool *wa.Pool, settings model.HumanSettings) *Runner {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

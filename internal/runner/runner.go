@@ -11,9 +11,9 @@ import (
 
 	"whatshap-gateway/internal/ai"
 	"whatshap-gateway/internal/config"
-	"whatshap-gateway/internal/excel"
 	"whatshap-gateway/internal/model"
 	"whatshap-gateway/internal/wa"
+	"whatshap-gateway/internal/workbench"
 )
 
 var ErrAlreadyRunning = errors.New("pengujian sedang berjalan; silakan jeda atau tunggu selesai terlebih dahulu")
@@ -27,7 +27,7 @@ type EventSink func(eventType string, payload any)
 type Runner struct {
 	mu        sync.Mutex
 	cfg       *config.AppConfig
-	store     *excel.Store
+	store     workbench.Store
 	aiEngine  *ai.Engine
 	waClient  *wa.Client
 	emit      EventSink
@@ -66,7 +66,7 @@ type Runner struct {
 
 func NewRunner(
 	cfg *config.AppConfig,
-	store *excel.Store,
+	store workbench.Store,
 	aiEngine *ai.Engine,
 	waClient *wa.Client,
 	emit EventSink,
@@ -217,9 +217,14 @@ func (r *Runner) OnRowSaved(fn func()) {
 	r.mu.Unlock()
 }
 
-// SetStore swaps the workbook this runner writes to (used after a per-user
-// Excel upload). Callers must ensure the runner is idle.
-func (r *Runner) SetStore(store *excel.Store) {
+// SetStore swaps the data source this runner writes to (used after a per-user
+// Excel upload, or when selecting between file and PostgreSQL backends).
+// Callers must ensure the runner is idle.
+//
+// Catatan: workbench.Store adalah interface, sehingga typed-nil konkret
+// (*excel.Store)(nil) akan menjadi non-nil di sini. Pemanggil wajib memastikan
+// nilai konkretnya tidak nil sebelum memanggil SetStore.
+func (r *Runner) SetStore(store workbench.Store) {
 	r.mu.Lock()
 	r.store = store
 	r.mu.Unlock()

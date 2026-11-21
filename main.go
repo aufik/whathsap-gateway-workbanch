@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"whatshap-gateway/internal/tenants"
 	"whatshap-gateway/internal/wa"
 	"whatshap-gateway/internal/web"
+	"whatshap-gateway/internal/workbench"
 )
 
 //go:embed public/*
@@ -92,6 +94,34 @@ func main() {
 		workbooks.MarkDirty(userID)
 	})
 
+	var srvWiring []func(*web.Server)
+	// Pemilihan sumber data pengujian:
+	//   WORKBENCH_DB=1 -> schema workbench di PostgreSQL (DBStore)
+	//   selain itu      -> file workbook seperti sebelumnya
+	// Factory dipasang SETELAH runnerManager dibuat supaya runner per-user
+	// langsung memakai backend yang benar.
+	workbenchDB := cfg.WorkbenchDB
+	if workbenchDB {
+		srvWiring = append(srvWiring, func(s *web.Server) {
+			s.SetWorkbenchFactory(func(userID int64) (workbench.Store, error) {
+				st, err := workbench.NewDBStore(dbStore.DB(), userID)
+				if err != nil {
+					return nil, err
+				}
+				st.SetExportConfig(workbench.ExportConfig{
+					MediaRoots: []string{
+						filepath.Join("data", "users", fmt.Sprintf("%d", userID), "downloads"),
+						filepath.Join("data", "downloads"),
+					},
+				})
+				return st, nil
+			})
+		})
+		log.Printf("Sumber data pengujian: schema workbench (PostgreSQL)")
+	} else {
+		log.Printf("Sumber data pengujian: file workbook (WORKBENCH_DB=0)")
+	}
+
 	// Per-user WhatsApp pools: each account owns its own device set.
 	waPools := wa.NewManager(func(userID int64, eventType string, payload any) {
 		broker.Broadcast(userID, eventType, payload)
@@ -142,6 +172,9 @@ func main() {
 		WAPool:    waPools,
 		Runners:   runnerManager,
 	})
+	for _, apply := range srvWiring {
+		apply(srvHandler)
+	}
 
 	// Live Chat Emulator: independent module, schema livechat.*. Booted only
 	// when the schema exists (read-only check inside), so a deployment that has
@@ -155,20 +188,24 @@ func main() {
 
 	// Persist per-user workbooks (results + attachments) before shutdown so the
 	// database always mirrors the newest state.
-	go func() {
-		ticker := time.NewTicker(20 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := workbooks.FlushDirty(ctx); err != nil {
-					log.Printf("PERINGATAN: gagal sinkron workbook ke database: %v", err)
+	// Tiker flush hanya relevan pada jalur file. Saat WORKBENCH_DB=1 data
+	// ditulis langsung ke PostgreSQL per mutasi, jadi tiker ini mati total.
+	if !workbenchDB {
+		go func() {
+			ticker := time.NewTicker(20 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := workbooks.FlushDirty(ctx); err != nil {
+						log.Printf("PERINGATAN: gagal sinkron workbook ke database: %v", err)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 	httpSrv := &http.Server{
@@ -197,8 +234,10 @@ func main() {
 	lcCancel()
 	runnerManager.StopAll()
 	_ = run.Stop()
-	if err := workbooks.PersistAll(context.Background()); err != nil {
-		log.Printf("PERINGATAN: gagal simpan workbook terakhir: %v", err)
+	if !workbenchDB {
+		if err := workbooks.PersistAll(context.Background()); err != nil {
+			log.Printf("PERINGATAN: gagal simpan workbook terakhir: %v", err)
+		}
 	}
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer shutdownCancel()

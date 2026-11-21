@@ -23,6 +23,7 @@ import (
 	"whatshap-gateway/internal/runner"
 	"whatshap-gateway/internal/tenants"
 	"whatshap-gateway/internal/wa"
+	"whatshap-gateway/internal/workbench"
 )
 
 type AuthWiring struct {
@@ -37,7 +38,7 @@ type AuthWiring struct {
 
 type Server struct {
 	cfg       *config.AppConfig
-	store     *excel.Store
+	store     workbench.Store
 	aiEngine  *ai.Engine
 	waClient  *wa.Client
 	runner    *runner.Runner
@@ -48,11 +49,14 @@ type Server struct {
 	workbooks *tenants.Manager
 	waPool    *wa.Manager
 	livechat  *livechatHandlers
+	// workbenchFactory dialokasikan main.go saat WORKBENCH_DB=1; nil = pakai
+	// jalur file (perilaku lama).
+	workbenchFactory func(userID int64) (workbench.Store, error)
 }
 
 func NewServer(
 	cfg *config.AppConfig,
-	store *excel.Store,
+	store workbench.Store,
 	aiEngine *ai.Engine,
 	waClient *wa.Client,
 	run *runner.Runner,
@@ -212,9 +216,18 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// tenantStore resolves the caller's own workbook. It is the single place that
-// guarantees data isolation between accounts.
-func (s *Server) tenantStore(ctx context.Context, userID int64) *excel.Store {
+// tenantStore resolves the caller's own data source. It is the single place
+// that guarantees data isolation between accounts.
+//
+// Bila WorkbenchDB aktif (WORKBENCH_DB=1), data dibaca dari schema workbench
+// di PostgreSQL. Selain itu jalur lama (file workbook) tetap dipakai, sehingga
+// rollback cukup dengan mengubah env tanpa revert kode.
+func (s *Server) tenantStore(ctx context.Context, userID int64) workbench.Store {
+	if s.workbenchFactory != nil {
+		if st, err := s.workbenchFactory(userID); err == nil && st != nil {
+			return st
+		}
+	}
 	if s.workbooks == nil {
 		return s.store
 	}
@@ -1147,3 +1160,14 @@ func writeErr(w http.ResponseWriter, status int, err error) {
 		"error": err.Error(),
 	})
 }
+
+// SetWorkbenchFactory memasang resolver data-source PostgreSQL (schema
+// workbench). Saat dipasang, seluruh handler dan runner memakai DBStore dan
+// jalur file tidak lagi dipakai. Nil membatalkan (kembali ke file workbook).
+func (s *Server) SetWorkbenchFactory(fn func(userID int64) (workbench.Store, error)) {
+	s.workbenchFactory = fn
+}
+
+// HasWorkbenchFactory melaporkan apakah jalur database aktif (dipakai main
+// untuk logging dan untuk melewati flush workbook).
+func (s *Server) HasWorkbenchFactory() bool { return s.workbenchFactory != nil }

@@ -39,7 +39,11 @@ func (s *Server) attachTenant(ctx context.Context, userID int64) {
 		return
 	}
 	store := s.tenantStore(ctx, userID)
-	s.runner.SetStore(store)
+	// Interface bisa berisi typed-nil; jangan menimpa store yang sedang
+	// dipakai dengan nilai yang akan panic saat dipanggil.
+	if store != nil {
+		s.runner.SetStore(store)
+	}
 	s.runner.SetSettings(userID, s.userSettings(ctx, userID))
 	if s.waPool != nil {
 		s.runner.SetPool(s.waPool.Pool(userID))
