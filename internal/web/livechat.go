@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -379,14 +380,30 @@ func (h *livechatHandlers) handleExcelDownload(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	path := livechat.WorkbookPath(userID)
-	if fi, err := os.Stat(path); err != nil || fi.IsDir() {
+	// Ringkasan dibangun langsung dari schema livechat (tanpa file di disk).
+	// Bila belum ada sesi sama sekali, endpoint menjawab 404 seperti sebelumnya
+	// agar UI dapat menampilkan pesan yang sama.
+	sessions, err := h.store.ListSessions(r.Context(), userID, 1)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(sessions) == 0 {
 		writeErr(w, http.StatusNotFound, errors.New("belum ada ringkasan live chat; jalankan minimal satu sesi"))
 		return
 	}
+
+	data, fileName, err := livechat.GenerateExcel(r.Context(), h.store, userID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	w.Header().Set("Content-Disposition", `attachment; filename="livechat.xlsx"`)
-	http.ServeFile(w, r, path)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // GET /api/livechat/media/{sessionId}/{file} serves a bot attachment that the
