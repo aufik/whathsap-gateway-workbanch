@@ -29,3 +29,6 @@ data/users/*/livechat.xlsx
 data/users/*/livechat.xlsx.tmp
 data/users/*/livechat_assets/
 data/users/*/livechat_media/
+
+# Workbench runtime template (dihasilkan ulang oleh cmd/workbench-seed-template)
+data/templates/*.xlsx
