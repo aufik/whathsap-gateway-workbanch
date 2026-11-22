@@ -20,6 +20,10 @@ type WAClient interface {
 	SendLocation(ctx context.Context, phone string, lat, lng float64, name, address string) error
 	RegisterCollector(botPhone string) (ReplyCollector, error)
 	Status() model.WAStatus
+	SetPresenceAvailable(ctx context.Context, available bool)
+	MarkBubblesRead(ctx context.Context, phone string, messageIDs []string) error
+	SimulateTyping(ctx context.Context, phone string, text string, s model.HumanSettings) error
+	PauseTyping(ctx context.Context, phone string) error
 }
 
 // ReplyCollector is the subset of *wa.Collector the engine needs.
@@ -134,6 +138,38 @@ func humanBursts(totalMs int) int {
 	}
 }
 
+// unreadDelay models the reaction delay before opening/reading an incoming message (grey tick window).
+func (h *humanizer) unreadDelay(ctx context.Context) error {
+	s := h.settings
+	ms := h.randBetween(s.UnreadDelayMinMs, s.UnreadDelayMaxMs)
+	if h.randBetween(1, 100) <= 18 {
+		ms += h.randBetween(1200, 3200)
+	}
+	if ms <= 0 {
+		return nil
+	}
+	return h.sleeper(ctx, ms)
+}
+
+// readingDelay models comprehension time after blue tick (MarkRead) before starting to reply.
+func (h *humanizer) readingDelay(ctx context.Context, replyChars int, hasMedia bool) error {
+	s := h.settings
+	ms := replyChars * 22
+	if ms < s.ReadDelayMinMs {
+		ms = s.ReadDelayMinMs
+	}
+	if ms > s.ReadDelayMaxMs {
+		ms = s.ReadDelayMaxMs
+	}
+	if hasMedia {
+		ms += h.randBetween(1500, 3500)
+	}
+	if ms <= 0 {
+		return nil
+	}
+	return h.sleeper(ctx, ms)
+}
+
 // preThink models the "focus before typing" pause, so the bot sees a realistic
 // delay between read and reply.
 func (h *humanizer) preThink(ctx context.Context) error {
@@ -145,19 +181,26 @@ func (h *humanizer) preThink(ctx context.Context) error {
 	return h.sleeper(ctx, ms)
 }
 
-// typing then sends text; the duration equals what the runner would spend on a
-// row of the same length.
-func (h *humanizer) typedSend(ctx context.Context, send func() error, text string) (int, error) {
-	ms := h.typingMs(len([]rune(text)))
-	if err := h.sleeper(ctx, ms); err != nil {
+// typedSend simulates human typing (pre-think focus + multi-burst composing presence to WA socket) then sends.
+func (h *humanizer) typedSend(ctx context.Context, wa WAClient, botPhone string, send func() error, text string) (int, error) {
+	// 1. Pre-think pause (focusing on what to reply)
+	if err := h.preThink(ctx); err != nil {
 		return 0, err
 	}
-	if send != nil {
-		if err := send(); err != nil {
-			return ms, err
-		}
+	// 2. Real multi-burst typing composing status to WhatsApp socket (seen by bot)
+	if wa != nil && botPhone != "" {
+		_ = wa.SimulateTyping(ctx, botPhone, text, h.settings)
 	}
-	return ms, nil
+	// 3. Send message
+	var sendErr error
+	if send != nil {
+		sendErr = send()
+	}
+	// 4. Pause typing status on WA socket
+	if wa != nil && botPhone != "" {
+		_ = wa.PauseTyping(ctx, botPhone)
+	}
+	return h.typingMs(len([]rune(text))), sendErr
 }
 
 // interTurnDelay mirrors the runner's pauseBetweenQuestions cadence without

@@ -39,12 +39,19 @@ type SessionInput struct {
 	AssetIDs        []int64
 	MaxTurns        int
 	CategoryMode    CategoryMode
+	RNGSeed         int64
 }
 
 // CreateSession inserts a new running session for userID.
 func (s *Store) CreateSession(ctx context.Context, userID int64, in SessionInput) (Session, error) {
 	if userID <= 0 {
 		return Session{}, errors.New("user id tidak valid")
+	}
+	if in.TanggalKejadian == "" {
+		in.TanggalKejadian = time.Now().Format("2006-01-02")
+	}
+	if in.Title == "" {
+		in.Title = "Live Chat " + time.Now().Format("02 Jan 15:04")
 	}
 	if err := in.validate(); err != nil {
 		return Session{}, err
@@ -67,12 +74,12 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, in SessionInput
 		INSERT INTO livechat.sessions (
 			user_id, device_uuid, wa_phone, bot_phone, title, report_text,
 			nama_pengadu, tanggal_kejadian, alamat_kejadian, titik_lokasi,
-			titik_lokasi_source, asset_ids, max_turns, category_mode, status
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			titik_lokasi_source, asset_ids, max_turns, category_mode, status, rng_seed
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		RETURNING `+sessionColumns,
-		userID, in.DeviceUUID, in.WAPhone, in.BotPhone, in.Title, in.ReportText,
+		userID, in.DeviceUUID, in.WAPhone, in.BotPhone, in.Title, nullableString(in.ReportText),
 		in.NamaPengadu, tanggal, in.AlamatKejadian, nullableString(in.TitikLokasi),
-		string(in.TitikLokasiSrc), pq.Array(ids), in.MaxTurns, string(in.CategoryMode), string(StatusRunning),
+		string(in.TitikLokasiSrc), pq.Array(ids), in.MaxTurns, string(in.CategoryMode), string(StatusRunning), in.RNGSeed,
 	)
 	return scanSession(row)
 }
@@ -83,12 +90,6 @@ func (in SessionInput) validate() error {
 	}
 	if strings.TrimSpace(in.BotPhone) == "" {
 		return errors.New("nomor whatsapp bot target wajib diisi")
-	}
-	if strings.TrimSpace(in.Title) == "" {
-		return errors.New("judul pengaduan wajib diisi")
-	}
-	if strings.TrimSpace(in.ReportText) == "" {
-		return errors.New("isi laporan wajib diisi")
 	}
 	if _, err := time.Parse("2006-01-02", in.TanggalKejadian); err != nil {
 		return errors.New("tanggal kejadian harus format YYYY-MM-DD")
@@ -107,11 +108,11 @@ func (in SessionInput) validate() error {
 }
 
 const sessionColumns = `
-	id, user_id, device_uuid, wa_phone, bot_phone, title, report_text,
+	id, user_id, device_uuid, wa_phone, bot_phone, title, coalesce(report_text,''),
 	nama_pengadu, to_char(tanggal_kejadian,'YYYY-MM-DD'), alamat_kejadian,
 	coalesce(titik_lokasi,''), titik_lokasi_source, asset_ids, max_turns,
 	category_mode, status, coalesce(end_reason,''), coalesce(last_chat_excerpt,''),
-	coalesce(ticket_no,''), total_turns, created_at, started_at, ended_at`
+	coalesce(ticket_no,''), total_turns, created_at, started_at, ended_at, rng_seed`
 
 type scanner interface {
 	Scan(dest ...any) error
@@ -129,7 +130,7 @@ func scanSession(sc scanner) (Session, error) {
 		&s.ID, &s.UserID, &s.DeviceUUID, &s.WAPhone, &s.BotPhone, &s.Title, &s.ReportText,
 		&s.NamaPengadu, &s.TanggalKejadian, &s.AlamatKejadian, &s.TitikLokasi, &titikSrc,
 		&assets, &s.MaxTurns, &mode, &status, &s.EndReason, &s.LastChatExcerpt,
-		&s.TicketNo, &s.TotalTurns, &s.CreatedAt, &s.StartedAt, &s.EndedAt,
+		&s.TicketNo, &s.TotalTurns, &s.CreatedAt, &s.StartedAt, &s.EndedAt, &s.RNGSeed,
 	)
 	if err != nil {
 		return Session{}, err

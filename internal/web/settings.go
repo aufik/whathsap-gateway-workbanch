@@ -14,7 +14,7 @@ import (
 // process defaults on a first visit or when the database is unavailable.
 func (s *Server) userSettings(ctx context.Context, userID int64) model.HumanSettings {
 	base := s.cfg.GetSettings()
-	if s.auth.DB == nil || userID <= 0 {
+	if s.auth.DB == nil || s.auth.DB.DB() == nil || userID <= 0 {
 		return base
 	}
 	raw, botPhone, ok, err := s.auth.DB.LoadSettings(ctx, userID)

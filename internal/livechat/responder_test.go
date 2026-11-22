@@ -70,19 +70,19 @@ func TestAnswerMatrix(t *testing.T) {
 			case ModeBenar:
 				switch kind {
 				case KindNama:
-					if res.Text != sess.NamaPengadu {
+					if !strings.Contains(res.Text, sess.NamaPengadu) {
 						t.Fatalf("benar/nama: %q", res.Text)
 					}
 				case KindIsiLaporan:
-					if res.Text != sess.ReportText {
+					if !strings.Contains(res.Text, sess.ReportText) {
 						t.Fatalf("benar/isi: %q", res.Text)
 					}
 				case KindTanggal:
-					if res.Text != sess.TanggalKejadian {
+					if !strings.Contains(res.Text, sess.TanggalKejadian) {
 						t.Fatalf("benar/tanggal: %q", res.Text)
 					}
 				case KindAlamat:
-					if res.Text != sess.AlamatKejadian {
+					if !strings.Contains(res.Text, sess.AlamatKejadian) {
 						t.Fatalf("benar/alamat: %q", res.Text)
 					}
 				case KindTitikLokasi:
@@ -94,7 +94,8 @@ func TestAnswerMatrix(t *testing.T) {
 						t.Fatalf("benar/berkas should send first asset, got %+v", res.MediaAsset)
 					}
 				case KindKonfirmasi:
-					if !strings.Contains(strings.ToLower(res.Text), "iya") {
+					low := strings.ToLower(res.Text)
+					if !strings.Contains(low, "iya") && !strings.Contains(low, "betul") && !strings.Contains(low, "ya") && !strings.Contains(low, "benar") && !strings.Contains(low, "sesuai") {
 						t.Fatalf("benar/konfirmasi text %q", res.Text)
 					}
 				}
@@ -218,7 +219,7 @@ func TestAIHookBenarOnly(t *testing.T) {
 	// Error from hook → fall back to deterministic draft.
 	h3 := &hookStub{err: errors.New("boom")}
 	res3 := (&Responder{AI: h3}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess})
-	if res3.Text != sess.NamaPengadu {
+	if !strings.Contains(res3.Text, sess.NamaPengadu) {
 		t.Fatalf("on AI error should fall back to draft, got %q", res3.Text)
 	}
 }
@@ -250,5 +251,67 @@ func TestGenerateRandomPreviewDeterministic(t *testing.T) {
 	}
 	if a.TanggalKejadian == "2026-11-20" {
 		t.Fatalf("tanggal should be >=1 day back, got %s", a.TanggalKejadian)
+	}
+}
+
+// TestPhraseVariationsAndRepetition verifies Lapis A (variations) & Lapis B (repetition reminder)
+func TestPhraseVariationsAndRepetition(t *testing.T) {
+	sess := baseSession(ModeBenar)
+	resp := responderFixture()
+
+	// 1. Repetition detection for name
+	inRepeat := AnswerInput{
+		Session:  sess,
+		Random:   seededRand(1),
+		IsRepeat: true,
+	}
+	resRepeat := resp.ComposeForKind(context.Background(), KindNama, inRepeat)
+	if !strings.Contains(resRepeat.Text, "Nama saya tadi sudah diinfokan") || !strings.Contains(resRepeat.Text, sess.NamaPengadu) {
+		t.Fatalf("expected repetition prefix for name, got %q", resRepeat.Text)
+	}
+
+	// 2. Variations across different seeds
+	seenPhrases := map[string]bool{}
+	for i := int64(1); i <= 20; i++ {
+		res := resp.ComposeForKind(context.Background(), KindKonfirmasi, AnswerInput{
+			Session: sess,
+			Random:  seededRand(i),
+		})
+		seenPhrases[res.Text] = true
+	}
+	if len(seenPhrases) < 3 {
+		t.Fatalf("expected at least 3 distinct phrase variations for konfirmasi, got %d: %v", len(seenPhrases), seenPhrases)
+	}
+}
+
+// TestDynamicReportWhenEmpty verifies Option A: when ReportText is empty,
+// a dynamic contextual report is generated rather than failing or returning empty.
+func TestDynamicReportWhenEmpty(t *testing.T) {
+	sess := baseSession(ModeBenar)
+	sess.ReportText = "" // empty report text
+	resp := responderFixture()
+
+	res := resp.ComposeForKind(context.Background(), KindIsiLaporan, AnswerInput{
+		Session:    sess,
+		Random:     seededRand(42),
+		BotContext: "Boleh dijelaskan lebih dulu kejadian atau masalah yang ingin disampaikan?",
+	})
+	if strings.TrimSpace(res.Text) == "" {
+		t.Fatalf("expected dynamic response when report text is empty, got empty")
+	}
+	if !strings.Contains(res.Text, "masalah") && !strings.Contains(res.Text, "lapor") && !strings.Contains(res.Text, "kendala") {
+		t.Fatalf("expected context-relevant dynamic text, got %q", res.Text)
+	}
+}
+
+// TestSeedReproducibility verifies that the exact same seed produces the exact same response series.
+func TestSeedReproducibility(t *testing.T) {
+	sess := baseSession(ModeBenar)
+	resp := responderFixture()
+
+	res1 := resp.ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess, Random: seededRand(777)})
+	res2 := resp.ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess, Random: seededRand(777)})
+	if res1.Text != res2.Text {
+		t.Fatalf("same seed must produce identical response: %q vs %q", res1.Text, res2.Text)
 	}
 }

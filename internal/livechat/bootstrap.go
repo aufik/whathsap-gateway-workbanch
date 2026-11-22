@@ -20,6 +20,7 @@ type BootOptions struct {
 	Emitter   EngineEmitter
 	MediaRoot func(userID int64) string
 	AssetRoot func(userID int64) string
+	AI        AIHook
 }
 
 // BootstrapResult bundles everything main.go needs to wire to the server.
@@ -71,7 +72,7 @@ func BootstrapLiveChat(ctx context.Context, opts BootOptions) (*BootstrapResult,
 	mgr, err := NewManager(ManagerOptions{
 		Store:     store,
 		Assets:    assets,
-		Responder: &Responder{},
+		Responder: &Responder{AI: opts.AI},
 		WA:        opts.WA,
 		Settings: func(ctx context.Context, userID int64) (model.HumanSettings, bool) {
 			return opts.Settings(ctx, userID), true

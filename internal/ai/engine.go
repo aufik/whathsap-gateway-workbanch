@@ -220,6 +220,19 @@ func (e *Engine) isLLMEnabled() bool {
 	return strings.TrimSpace(e.cfg.LLMBaseURL) != "" && strings.TrimSpace(e.cfg.LLMModel) != ""
 }
 
+// IsLLMEnabled reports whether the LLM is configured and ready.
+func (e *Engine) IsLLMEnabled() bool {
+	return e.isLLMEnabled()
+}
+
+// ChatReply sends a one-turn chat completion request to the configured LLM.
+func (e *Engine) ChatReply(ctx context.Context, systemPrompt, userPrompt string, temp float64) (string, error) {
+	if !e.isLLMEnabled() {
+		return "", errors.New("LLM belum dikonfigurasi atau tidak aktif")
+	}
+	return e.chatCompletion(ctx, systemPrompt, userPrompt, temp)
+}
+
 func (e *Engine) TestConnection(ctx context.Context) (string, error) {
 	if !e.isLLMEnabled() {
 		return "", errors.New("LLM belum dikonfigurasi di file .env (LLM_BASE_URL dan LLM_MODEL masih kosong)")

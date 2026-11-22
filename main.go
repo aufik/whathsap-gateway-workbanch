@@ -179,7 +179,7 @@ func main() {
 	// Live Chat Emulator: independent module, schema livechat.*. Booted only
 	// when the schema exists (read-only check inside), so a deployment that has
 	// not applied the SQL still starts cleanly without this tab.
-	if lc, lcErr := web.BuildLiveChat(ctx, dbStore.DB(), waPools, srvHandler.SettingsForUser, broker); lcErr != nil {
+	if lc, lcErr := web.BuildLiveChat(ctx, dbStore.DB(), waPools, srvHandler.SettingsForUser, broker, aiEngine); lcErr != nil {
 		log.Printf("PERINGATAN: modul Live Chat gagal diinisialisasi: %v", lcErr)
 	} else if lc != nil {
 		srvHandler.AttachLiveChat(lc.Store, lc.Assets, lc.Manager, lc.Exporter)

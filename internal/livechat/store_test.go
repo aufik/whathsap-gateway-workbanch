@@ -95,12 +95,17 @@ func TestStoreSessionCRUDAndCascade(t *testing.T) {
 	}
 
 	// 1. Create
-	sess, err := st.CreateSession(ctx, u1, sampleInput())
+	input := sampleInput()
+	input.RNGSeed = 123456789
+	sess, err := st.CreateSession(ctx, u1, input)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	if sess.ID == 0 || sess.UserID != u1 {
 		t.Fatalf("unexpected session: %+v", sess)
+	}
+	if sess.RNGSeed != 123456789 {
+		t.Fatalf("rng_seed wrong: got %d, want 123456789", sess.RNGSeed)
 	}
 	if sess.Status != StatusRunning || sess.MaxTurns != 40 || sess.CategoryMode != ModeBenar {
 		t.Fatalf("session defaults wrong: %+v", sess)
@@ -108,6 +113,22 @@ func TestStoreSessionCRUDAndCascade(t *testing.T) {
 	if sess.AssetIDs == nil || len(sess.AssetIDs) != 0 {
 		t.Fatalf("asset_ids should be non-nil empty slice, got %#v", sess.AssetIDs)
 	}
+
+	// 1b. Create with empty ReportText and Title (must auto-fill Title and allow empty ReportText)
+	emptyIn := sampleInput()
+	emptyIn.ReportText = ""
+	emptyIn.Title = ""
+	emptySess, err := st.CreateSession(ctx, u1, emptyIn)
+	if err != nil {
+		t.Fatalf("create session with empty report text: %v", err)
+	}
+	if emptySess.ReportText != "" {
+		t.Fatalf("expected empty ReportText string, got %q", emptySess.ReportText)
+	}
+	if emptySess.Title == "" {
+		t.Fatalf("expected auto-filled title, got empty")
+	}
+	_ = st.DeleteSession(ctx, u1, emptySess.ID)
 
 	// 2. List per user
 	listU1, err := st.ListSessions(ctx, u1, 0)

@@ -22,6 +22,8 @@ type AnswerInput struct {
 	Assets      []Asset // owned by Session.UserID, ordered by creation
 	Random      *rand.Rand
 	OutsideUsed bool // set to true when this answer used an extra-Medan coord
+	BotContext  string
+	IsRepeat    bool
 }
 
 // AnswerResult is one turn's outgoing message + the audit trail the engine
@@ -60,7 +62,11 @@ func (r *Responder) ComposeForKind(ctx context.Context, kind QuestionKind, in An
 	if r.AI != nil && media == nil && loc == nil && base != "" && mode == ModeBenar {
 		// Keep AI strictly for the "benar" mode: typo/ngasal/celah must stay
 		// deterministic so the QA signal is reproducible.
-		if rewritten, err := r.AI.ComposeAnswer(ctx, kind, base, in.Session.ReportText); err == nil {
+		promptContext := in.BotContext
+		if promptContext == "" {
+			promptContext = in.Session.Title
+		}
+		if rewritten, err := r.AI.ComposeAnswer(ctx, kind, base, promptContext); err == nil {
 			if clean := sanitizeAIText(rewritten); clean != "" {
 				base = clean
 			}
@@ -86,25 +92,30 @@ func (r *Responder) ComposeForKind(ctx context.Context, kind QuestionKind, in An
 func (r *Responder) localDraft(in AnswerInput, kind QuestionKind, mode CategoryMode) (text string, media *Asset, loc *Location, note string, usedOutside bool) {
 	sess := in.Session
 
-	// 1. Build the correct answer for this field.
+	// 1. Build the correct answer for this field using phrase variations (Lapis A).
 	base := ""
 	switch kind {
 	case KindNama:
-		base = sess.NamaPengadu
+		base = pickNama(sess.NamaPengadu, in.IsRepeat, in.Random)
 	case KindTanggal:
-		base = sess.TanggalKejadian
+		base = pickTanggal(sess.TanggalKejadian, in.IsRepeat, in.Random)
 	case KindAlamat:
-		base = sess.AlamatKejadian
+		base = pickAlamat(sess.AlamatKejadian, in.IsRepeat, in.Random)
 	case KindIsiLaporan:
-		base = sess.ReportText
+		if strings.TrimSpace(sess.ReportText) != "" {
+			base = pickReport(sess.ReportText, in.Random)
+		} else {
+			// Opsi A: tester mengosongkan laporan -> respons balik kontekstual pertanyaan bot
+			base = pickDynamicReport(in.BotContext, in.Random)
+		}
 	case KindTitikLokasi:
 		base, loc, note = r.locationAnswer(in)
 	case KindBerkas:
 		base, media, note = r.mediaAnswer(in)
 	case KindKonfirmasi:
-		base = "iya, sudah benar"
+		base = pickKonfirmasi(in.Random)
 	case KindLainnya, KindUnknown:
-		base = "mohon dilanjutkan pak, terima kasih"
+		base = pickLainnya(in.Random)
 	}
 
 	// 2. Apply mode transformations on top of the fact-correct answer.
@@ -145,7 +156,7 @@ func (r *Responder) mediaAnswer(in AnswerInput) (text string, media *Asset, note
 	if asset == nil {
 		return "lewat", nil, "tidak ada berkas terpilih; dijawab lewat"
 	}
-	return captionForAsset(asset), asset, "berkas terpilih dikirim"
+	return captionForAsset(asset, in.Random), asset, "berkas terpilih dikirim"
 }
 
 // ownsAsset reports whether assetID is one of the session's configured assets.
@@ -212,11 +223,131 @@ func firstAssetForSession(assets []Asset, ids []int64) *Asset {
 	return nil
 }
 
-func captionForAsset(a *Asset) string {
+func captionForAsset(a *Asset, rng *rand.Rand) string {
 	if a.Kind == AssetImage {
-		return "ini fotonya pak"
+		opts := []string{
+			"ini fotonya pak",
+			"ini lampiran fotonya min",
+			"bukti fotonya ini ya pak",
+			"lampiran berkas fotonya pak",
+		}
+		if rng == nil {
+			return opts[0]
+		}
+		return opts[rng.Intn(len(opts))]
 	}
-	return "ini dokumennya pak"
+	opts := []string{
+		"ini dokumennya pak",
+		"ini lampiran dokumennya min",
+		"berkas pendukungnya ini pak",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickKonfirmasi(rng *rand.Rand) string {
+	opts := []string{
+		"iya pak, sudah benar",
+		"betul min, data sudah sesuai",
+		"ya sudah sesuai semua, silakan dikirim",
+		"iya benar min, mohon diproses ya",
+		"sudah sesuai pak, lanjutkan",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickNama(name string, isRepeat bool, rng *rand.Rand) string {
+	if isRepeat {
+		return "Nama saya tadi sudah diinfokan ya pak: " + name
+	}
+	opts := []string{
+		name,
+		"Nama saya " + name + " pak",
+		name + " min",
+		"Saya " + name + " pak",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickTanggal(tgl string, isRepeat bool, rng *rand.Rand) string {
+	if isRepeat {
+		return "Tanggal kejadiannya tadi " + tgl + " pak"
+	}
+	opts := []string{
+		tgl,
+		"Kejadiannya tanggal " + tgl + " pak",
+		"Tanggal " + tgl + " min",
+		"Pada tanggal " + tgl,
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickAlamat(alamat string, isRepeat bool, rng *rand.Rand) string {
+	if isRepeat {
+		return "Alamatnya di " + alamat + " ya pak"
+	}
+	opts := []string{
+		alamat,
+		"Lokasinya di " + alamat + " pak",
+		"Kejadian di " + alamat + " min",
+		"Di " + alamat + " pak",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickReport(report string, rng *rand.Rand) string {
+	opts := []string{
+		report,
+		"Begini pak, " + report,
+		"Ini laporannya min: " + report,
+		"Masalahnya: " + report,
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickDynamicReport(botContext string, rng *rand.Rand) string {
+	opts := []string{
+		"Mengenai masalah tersebut tolong segera dibantu tindak lanjuti ya pak.",
+		"Iya min, mohon diteruskan laporannya ke dinas terkait agar bisa dicek.",
+		"Ada kendala di lokasi tersebut min, tolong segera dibantu diperiksa.",
+		"Iya min, mohon bantuannya untuk menangani masalah yang saya laporkan ini.",
+		"Benar min, tolong dibantu solusinya untuk kejadian tersebut.",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
+func pickLainnya(rng *rand.Rand) string {
+	opts := []string{
+		"mohon dilanjutkan pak, terima kasih",
+		"lanjut aja pak",
+		"siap min, silakan",
+		"oke pak, bagaimana kelanjutannya?",
+		"mohon bantuannya ya min",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
 }
 
 // applyTypo uses the safe-replace table copied from internal/ai's chaos

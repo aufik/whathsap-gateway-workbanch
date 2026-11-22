@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -127,6 +128,10 @@ func (f *fakeWA) setConnected(v bool) {
 	f.connected = v
 	f.mu.Unlock()
 }
+func (f *fakeWA) SetPresenceAvailable(_ context.Context, _ bool) {}
+func (f *fakeWA) MarkBubblesRead(_ context.Context, _ string, _ []string) error { return nil }
+func (f *fakeWA) SimulateTyping(_ context.Context, _ string, _ string, _ model.HumanSettings) error { return nil }
+func (f *fakeWA) PauseTyping(_ context.Context, _ string) error { return nil }
 
 // --- fixtures ---
 
@@ -223,8 +228,8 @@ func TestEngineFinishesOnDoneSignal(t *testing.T) {
 	if len(fake.texts) != 2 {
 		t.Fatalf("expected 2 sent texts, got %d (%v)", len(fake.texts), fake.texts)
 	}
-	if fake.texts[1] != sess.NamaPengadu {
-		t.Fatalf("second send should be nama, got %q", fake.texts[1])
+	if !strings.Contains(fake.texts[1], sess.NamaPengadu) {
+		t.Fatalf("second send should contain nama, got %q", fake.texts[1])
 	}
 	if len(detail.Turns) != 1 {
 		t.Fatalf("expected 1 audited turn, got %d", len(detail.Turns))

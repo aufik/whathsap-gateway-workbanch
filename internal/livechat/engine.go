@@ -74,6 +74,9 @@ type Engine struct {
 	stopOnce sync.Once
 	closed   bool
 	ticket   string
+
+	rng              *rand.Rand
+	lastAnsweredKind QuestionKind
 }
 
 // newEngine binds a session to its config and returns a ready-to-run engine.
@@ -101,6 +104,17 @@ func (e *Engine) Run(parent context.Context) error {
 	}
 	e.col = col
 	defer col.Close()
+
+	// Anti-spam WA: Presence online saat sesi aktif, unavailable saat selesai
+	e.cfg.WA.SetPresenceAvailable(ctx, true)
+	defer e.cfg.WA.SetPresenceAvailable(context.Background(), false)
+
+	// Seed acak deterministik per sesi (disimpan di DB)
+	seed := e.session.RNGSeed
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
+	e.rng = rand.New(rand.NewSource(seed))
 
 	e.emit("livechat_status", map[string]any{"sessionId": e.session.ID, "status": string(StatusRunning)})
 	_ = e.cfg.Store.MarkStarted(ctx, e.session.UserID, e.session.ID)
@@ -189,6 +203,29 @@ func (e *Engine) Run(parent context.Context) error {
 // consumeTurn persists the received bubbles, composes the reply, sends it, and
 // reports whether the bot announced "selesai".
 func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, human *humanizer) (bool, error) {
+	// 0. Anti-spam WA: Unread delay (centang abu-abu) -> MarkRead (centang biru) -> Reading comprehension delay
+	if len(bubbles) > 0 {
+		if err := human.unreadDelay(ctx); err != nil {
+			return false, err
+		}
+		msgIDs := make([]string, 0, len(bubbles))
+		combinedText := ""
+		hasMedia := false
+		for _, b := range bubbles {
+			if b.ID != "" {
+				msgIDs = append(msgIDs, b.ID)
+			}
+			combinedText += b.Text + " "
+			if len(b.MediaBytes) > 0 || b.MediaName != "" {
+				hasMedia = true
+			}
+		}
+		_ = e.cfg.WA.MarkBubblesRead(ctx, e.session.BotPhone, msgIDs)
+		if err := human.readingDelay(ctx, len([]rune(combinedText)), hasMedia); err != nil {
+			return false, err
+		}
+	}
+
 	// 1. Persist & excerpt every received bubble.
 	var lastText string
 	for _, b := range bubbles {
@@ -250,13 +287,19 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 	}
 	assets, _ := e.cfg.Store.ListAssets(ctx, e.session.UserID)
 	assets = filterOwned(assets, e.session.AssetIDs)
-	rng := rand.New(rand.NewSource(time.Now().UnixNano() ^ int64(e.session.ID)))
+	if e.rng == nil {
+		e.rng = rand.New(rand.NewSource(time.Now().UnixNano() ^ int64(e.session.ID)))
+	}
+	isRepeat := (kind == e.lastAnsweredKind && kind != KindLainnya && kind != KindUnknown)
 	answer := e.cfg.Responder.ComposeForKind(ctx, kind, AnswerInput{
 		Session:     e.session,
 		Assets:      assets,
-		Random:      rng,
+		Random:      e.rng,
 		OutsideUsed: e.outside,
+		BotContext:  lastText,
+		IsRepeat:    isRepeat,
 	})
+	e.lastAnsweredKind = kind
 	if answer.DidUseOutsideLoc {
 		e.outside = true
 	}
@@ -302,7 +345,7 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 func (e *Engine) sendAnswer(ctx context.Context, a AnswerResult, human *humanizer) (string, error) {
 	if a.SendLoc != nil {
 		lat, lng := a.SendLoc.Lat, a.SendLoc.Lng
-		_, err := human.typedSend(ctx, func() error {
+		_, err := human.typedSend(ctx, e.cfg.WA, e.session.BotPhone, func() error {
 			return e.cfg.WA.SendLocation(ctx, e.session.BotPhone, lat, lng, a.SendLoc.Name, a.SendLoc.Address)
 		}, "share lokasi")
 		if err != nil {
@@ -326,7 +369,7 @@ func (e *Engine) sendAnswer(ctx context.Context, a AnswerResult, human *humanize
 			return "", errors.New("checksum aset berubah; tolong unggah ulang")
 		}
 		var sendErr error
-		_, sErr := human.typedSend(ctx, func() error {
+		_, sErr := human.typedSend(ctx, e.cfg.WA, e.session.BotPhone, func() error {
 			if a.MediaAsset.Kind == AssetImage {
 				sendErr = e.cfg.WA.SendImage(ctx, e.session.BotPhone, data, a.MediaAsset.Mimetype, a.Text)
 			} else {
@@ -346,7 +389,7 @@ func (e *Engine) sendAnswer(ctx context.Context, a AnswerResult, human *humanize
 		return media, e.persistOutgoing(ctx, MsgType(kind), a.Text, media)
 	}
 	// Plain text.
-	_, err := human.typedSend(ctx, func() error {
+	_, err := human.typedSend(ctx, e.cfg.WA, e.session.BotPhone, func() error {
 		return e.cfg.WA.SendText(ctx, e.session.BotPhone, a.Text)
 	}, a.Text)
 	if err != nil {
@@ -379,9 +422,6 @@ func (e *Engine) persistOutgoing(ctx context.Context, kind MsgType, body, mediaJ
 // sendOpening pushes the first bubble. It only uses text; no media this early
 // so the bot's greeting logic stays simple.
 func (e *Engine) sendOpening(ctx context.Context, human *humanizer) error {
-	if err := human.preThink(ctx); err != nil {
-		return err
-	}
 	turn := 0
 	if _, err := e.cfg.Store.InsertMessage(ctx, e.session.UserID, Message{
 		SessionID: e.session.ID,
@@ -393,7 +433,7 @@ func (e *Engine) sendOpening(ctx context.Context, human *humanizer) error {
 		return err
 	}
 	e.excerpt = append(e.excerpt, openingLine)
-	_, sendErr := human.typedSend(ctx, func() error {
+	_, sendErr := human.typedSend(ctx, e.cfg.WA, e.session.BotPhone, func() error {
 		return e.cfg.WA.SendText(ctx, e.session.BotPhone, openingLine)
 	}, openingLine)
 	return sendErr

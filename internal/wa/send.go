@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"google.golang.org/protobuf/proto"
 	"whatshap-gateway/internal/config"
+	"whatshap-gateway/internal/model"
 )
 
 // SendImage uploads data as a WhatsApp image and sends it to phone.
@@ -93,6 +95,48 @@ func (c *Client) SendText(ctx context.Context, phone, text string) error {
 	}
 	_, err = cli.SendMessage(ctx, jid, &waE2E.Message{Conversation: proto.String(text)})
 	return err
+}
+
+// MarkBubblesRead sends blue-tick read receipts for the given message IDs to target bot phone.
+func (c *Client) MarkBubblesRead(ctx context.Context, phone string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	cli, targetJID, err := c.jidFor(phone)
+	if err != nil {
+		return err
+	}
+	ids := make([]types.MessageID, 0, len(messageIDs))
+	for _, id := range messageIDs {
+		if id != "" {
+			ids = append(ids, types.MessageID(id))
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return cli.MarkRead(ctx, ids, time.Now(), targetJID, targetJID)
+}
+
+// SimulateTyping sends ChatPresenceComposing to the target bot with human multi-burst pauses.
+func (c *Client) SimulateTyping(ctx context.Context, phone string, text string, s model.HumanSettings) error {
+	cli, targetJID, err := c.jidFor(phone)
+	if err != nil {
+		return err
+	}
+	charCount := len([]rune(text))
+	typingMs := computeTypingDurationMs(charCount, s)
+	plannedBursts := estimateBurstCount(typingMs)
+	return simulateMultiBurstTyping(ctx, cli, targetJID, typingMs, plannedBursts)
+}
+
+// PauseTyping sends ChatPresencePaused to the target bot.
+func (c *Client) PauseTyping(ctx context.Context, phone string) error {
+	cli, targetJID, err := c.jidFor(phone)
+	if err != nil {
+		return err
+	}
+	return cli.SendChatPresence(ctx, targetJID, types.ChatPresencePaused, types.ChatPresenceMediaText)
 }
 
 func (c *Client) jidFor(phone string) (*whatsmeow.Client, types.JID, error) {

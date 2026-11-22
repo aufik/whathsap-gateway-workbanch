@@ -85,6 +85,7 @@ type Session struct {
 	LastChatExcerpt string            `json:"lastChatExcerpt"`
 	TicketNo        string            `json:"ticketNo"`
 	TotalTurns      int               `json:"totalTurns"`
+	RNGSeed         int64             `json:"rngSeed"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	StartedAt       *time.Time        `json:"startedAt,omitempty"`
 	EndedAt         *time.Time        `json:"endedAt,omitempty"`

@@ -171,22 +171,58 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	// Bot phone falls back to the user's saved settings when not provided.
+
+	// Bot phone prioritization:
+	// 1. Manually specified in request
+	// 2. user_settings.bot_phone (pengaturan target bot akun user kita - pemenang utama)
+	// 3. .env BOT_PHONE (fallback global)
 	botPhone := strings.TrimSpace(req.BotPhone)
 	if botPhone == "" {
-		botPhone = strings.TrimSpace(h.server.userSettings(r.Context(), userID).BotPhone)
+		userCfg := h.server.userSettings(r.Context(), userID)
+		botPhone = strings.TrimSpace(userCfg.BotPhone)
 	}
-	mode := livechat.CategoryMode(strings.TrimSpace(req.CategoryMode))
-	if mode == "" {
-		mode = livechat.ModeBenar
+	if botPhone == "" && h.server.cfg != nil {
+		botPhone = strings.TrimSpace(h.server.cfg.Settings.BotPhone)
 	}
+
+	// Auto-random fallback for empty fields so filling the form is entirely optional:
+	seed := time.Now().UnixNano()
+	rng := rand.New(rand.NewSource(seed))
+	preview := livechat.GenerateRandomPreview(rng, time.Now())
+
+	nama := strings.TrimSpace(req.NamaPengadu)
+	if nama == "" {
+		nama = preview.NamaPengadu
+	}
+	tgl := strings.TrimSpace(req.TanggalKejadian)
+	if tgl == "" {
+		tgl = preview.TanggalKejadian
+	}
+	alamat := strings.TrimSpace(req.AlamatKejadian)
+	if alamat == "" {
+		alamat = preview.AlamatKejadian
+	}
+	titik := strings.TrimSpace(req.TitikLokasi)
 	src := livechat.TitikLokasiSource(strings.TrimSpace(req.TitikLokasiSrc))
-	if src == "" {
-		if strings.TrimSpace(req.TitikLokasi) == "" {
+	if titik == "" && (src == "" || src == livechat.SourceRandom) {
+		titik = preview.TitikLokasi
+		src = livechat.SourceRandom
+	} else if src == "" {
+		if titik == "" {
 			src = livechat.SourceEmpty
 		} else {
 			src = livechat.SourceManual
 		}
+	}
+
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = "Live Chat " + time.Now().Format("02 Jan 15:04")
+	}
+
+	mode := livechat.CategoryMode(strings.TrimSpace(req.CategoryMode))
+	if mode == "" {
+		mode = livechat.ModeBenar
 	}
 	maxTurns := req.MaxTurns
 	if maxTurns <= 0 {
@@ -200,16 +236,17 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		DeviceUUID:      req.DeviceUUID,
 		WAPhone:         devicePhone(r.Context(), h.server, userID, req.DeviceUUID),
 		BotPhone:        botPhone,
-		Title:           strings.TrimSpace(req.Title),
+		Title:           title,
 		ReportText:      strings.TrimSpace(req.ReportText),
-		NamaPengadu:     strings.TrimSpace(req.NamaPengadu),
-		TanggalKejadian: strings.TrimSpace(req.TanggalKejadian),
-		AlamatKejadian:  strings.TrimSpace(req.AlamatKejadian),
-		TitikLokasi:     strings.TrimSpace(req.TitikLokasi),
+		NamaPengadu:     nama,
+		TanggalKejadian: tgl,
+		AlamatKejadian:  alamat,
+		TitikLokasi:     titik,
 		TitikLokasiSrc:  src,
 		AssetIDs:        req.AssetIDs,
 		MaxTurns:        maxTurns,
 		CategoryMode:    mode,
+		RNGSeed:         seed,
 	})
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
 
@@ -392,5 +393,107 @@ func TestLivechatStartNotBlockedWhenRunnerIdle(t *testing.T) {
 	})
 	if rec.Code == http.StatusConflict {
 		t.Fatalf("guard wrongly rejected idle runner: %s", rec.Body.String())
+	}
+}
+
+// mockWorkingWA satisfies livechat.WAClient for HTTP endpoint tests
+type mockWorkingWA struct{}
+
+func (mockWorkingWA) SendText(context.Context, string, string) error                                  { return nil }
+func (mockWorkingWA) SendImage(context.Context, string, []byte, string, string) error                  { return nil }
+func (mockWorkingWA) SendDocument(context.Context, string, []byte, string, string, string) error       { return nil }
+func (mockWorkingWA) SendLocation(context.Context, string, float64, float64, string, string) error     { return nil }
+func (mockWorkingWA) RegisterCollector(string) (livechat.ReplyCollector, error)                        { return mockCollector{}, nil }
+func (mockWorkingWA) Status() model.WAStatus                                                           { return model.WAStatus{Connected: true, LoggedIn: true} }
+func (mockWorkingWA) SetPresenceAvailable(context.Context, bool)                                       {}
+func (mockWorkingWA) MarkBubblesRead(context.Context, string, []string) error                           { return nil }
+func (mockWorkingWA) SimulateTyping(context.Context, string, string, model.HumanSettings) error        { return nil }
+func (mockWorkingWA) PauseTyping(context.Context, string) error                                        { return nil }
+
+type mockCollector struct{}
+
+func (mockCollector) Wait(context.Context, time.Duration, time.Duration) ([]livechat.CollectedBubble, error) {
+	return nil, nil
+}
+func (mockCollector) Close() {}
+
+type mockWorkingResolver struct{}
+
+func (mockWorkingResolver) ClientFor(int64, string) (livechat.WAClient, error) {
+	return mockWorkingWA{}, nil
+}
+
+// TestLivechatStartOptionalFieldsAutoRandom verifies that when a user only provides
+// deviceUuid, all other fields (nama, tanggal, alamat, titik, title, botPhone) are
+// auto-populated by the server without error.
+func TestLivechatStartOptionalFieldsAutoRandom(t *testing.T) {
+	db := openLivechatTestDB(t)
+	t.Cleanup(func() { db.Close() })
+	const uid int64 = 900407
+	_, _ = db.Exec(`INSERT INTO public.users (id, username, password_hash, full_name, role) VALUES ($1, 'user-900407', 'x', 'Test User', 'tester') ON CONFLICT (id) DO NOTHING`, uid)
+	cleanupLivechatUser(t, db, uid)
+	defer func() {
+		cleanupLivechatUser(t, db, uid)
+		_, _ = db.Exec(`DELETE FROM public.users WHERE id=$1`, uid)
+	}()
+
+	tmp := t.TempDir()
+	cfg, err := config.Load(filepath.Join(tmp, ".env"))
+	if err != nil {
+		t.Fatalf("cfg: %v", err)
+	}
+	cfg.Settings.BotPhone = "628975275737" // fallback global
+	dbStore := database.NewStore(db)
+	_ = dbStore.SaveSettings(t.Context(), uid, []byte(`{}`), "6281234567")
+	srv := NewServer(cfg, excel.NewEmptyStore(), ai.NewEngine(cfg), nil, nil, NewSSEBroker(), nil, AuthWiring{DB: dbStore})
+	st := livechat.NewStore(db)
+	assets := livechat.NewAssetService(st, filepath.Join(tmp, "assets"))
+	mgr, err := livechat.NewManager(livechat.ManagerOptions{
+		Store:     st,
+		Assets:    assets,
+		Responder: &livechat.Responder{},
+		WA:        mockWorkingResolver{},
+		Settings:  func(ctx context.Context, u int64) (model.HumanSettings, bool) { return model.HumanSettings{BotPhone: "6281234567"}, true },
+		MediaRoot: func(int64) string { return filepath.Join(tmp, "media") },
+		AssetRoot: func(int64) string { return filepath.Join(tmp, "assets") },
+		Emitter:   livechat.NopEmitter{},
+	})
+	if err != nil {
+		t.Fatalf("manager: %v", err)
+	}
+	srv.AttachLiveChat(st, assets, mgr, livechat.NewExporterAt(filepath.Join(tmp, "excel")))
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := auth.WithSession(r.Context(), &database.Session{UserID: uid, Username: "kamil", Role: "tester"})
+		srv.Handler().ServeHTTP(w, r.WithContext(ctx))
+	})
+
+	// Submit ONLY deviceUuid
+	rec, out := doJSON(t, h, "POST", "/api/livechat/sessions", map[string]any{
+		"deviceUuid": "d1c992a5b4554d289b4fdd97ad064b48",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created with empty form fields, got %d: %v", rec.Code, rec.Body.String())
+	}
+	sessObj, ok := out["session"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing session object: %v", out)
+	}
+	// Check user_settings.bot_phone winner:
+	if sessObj["botPhone"] != "6281234567" {
+		t.Fatalf("botPhone must come from user_settings (winner), got %v", sessObj["botPhone"])
+	}
+	// Check title auto-fill:
+	if !strings.HasPrefix(sessObj["title"].(string), "Live Chat ") {
+		t.Fatalf("title should be auto-filled with Live Chat timestamp, got %v", sessObj["title"])
+	}
+	// Check random nama, tanggal, alamat:
+	if sessObj["namaPengadu"] == "" || sessObj["tanggalKejadian"] == "" || sessObj["alamatKejadian"] == "" {
+		t.Fatalf("nama/tanggal/alamat must be auto-randomized, got nama=%v tgl=%v almt=%v",
+			sessObj["namaPengadu"], sessObj["tanggalKejadian"], sessObj["alamatKejadian"])
+	}
+	// Check rng_seed stored:
+	if sessObj["rngSeed"] == float64(0) {
+		t.Fatalf("rngSeed should be non-zero random seed, got %v", sessObj["rngSeed"])
 	}
 }

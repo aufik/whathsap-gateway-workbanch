@@ -43,6 +43,11 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// NewStore wraps an existing *sql.DB into a Store.
+func NewStore(db *sql.DB) *Store {
+	return &Store{db: db}
+}
+
 func (s *Store) Close() error { return s.db.Close() }
 
 // DB exposes the shared PostgreSQL pool so isolated modules (e.g. livechat)

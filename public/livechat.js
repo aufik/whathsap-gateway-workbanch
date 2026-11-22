@@ -5,6 +5,7 @@
 const LC = {
   root: null,
   userId: 0,
+  defaultBotPhone: "",
   preview: null,
   devices: [],
   assets: [],
@@ -63,8 +64,15 @@ async function initLiveChat() {
     const me = await apiLC("/api/auth/me");
     LC.userId = me && me.id ? me.id : 0;
   } catch {
-    // Not fatal: the emulator still works without media previews, and the
-    // server itself will reject any unauthorized call anyway.
+    // Not fatal
+  }
+  try {
+    const snap = await apiLC("/api/state");
+    if (snap && snap.settings && snap.settings.botPhone) {
+      LC.defaultBotPhone = snap.settings.botPhone;
+    }
+  } catch {
+    // Not fatal
   }
   renderShell();
   bindEvents();
@@ -98,12 +106,12 @@ function renderShell() {
       <h3 class="lc-section-title">Panel Kontrol Sesi Baru</h3>
       <form id="lcForm" class="lc-form-grid">
         <div class="lc-span-2 field-group">
-          <div class="lc-label-row"><label for="lcDevice">Nomor WA Penguji (connected)</label></div>
+          <div class="lc-label-row"><label for="lcDevice">Nomor WA Penguji (connected) *</label></div>
           <select id="lcDevice" required></select>
         </div>
         <div class="field-group">
-          <div class="lc-label-row"><label for="lcBotPhone">Nomor Bot Target</label></div>
-          <input id="lcBotPhone" type="text" placeholder="Kosongkan untuk pakai pengaturan akun" />
+          <div class="lc-label-row"><label for="lcBotPhone">Nomor Bot Target (tujuan)</label></div>
+          <input id="lcBotPhone" type="text" value="${escapeText(LC.defaultBotPhone || "")}" placeholder="Otomatis dari bot target akun Anda" />
         </div>
         <div class="field-group">
           <div class="lc-label-row"><label for="lcMode">Kategori Mode</label></div>
@@ -119,24 +127,24 @@ function renderShell() {
           <input id="lcMaxTurns" type="number" min="1" max="200" value="40" />
         </div>
         <div class="lc-span-2 field-group">
-          <div class="lc-label-row"><label for="lcTitle">Judul Pengaduan</label></div>
-          <input id="lcTitle" type="text" required maxlength="200" />
+          <div class="lc-label-row"><label for="lcTitle">Judul Pengaduan <small class="muted">(opsional)</small></label></div>
+          <input id="lcTitle" type="text" maxlength="200" placeholder="Kosongkan untuk otomatis dari waktu sesi" />
         </div>
         <div class="lc-span-2 field-group">
-          <div class="lc-label-row"><label for="lcReport">Isi Laporan / Pengaduan</label></div>
-          <textarea id="lcReport" rows="3" required></textarea>
+          <div class="lc-label-row"><label for="lcReport">Isi Laporan / Pengaduan <small class="muted">(opsional)</small></label></div>
+          <textarea id="lcReport" rows="3" placeholder="Opsional: kosongkan untuk respons otomatis sesuai alur bot"></textarea>
         </div>
         <div class="field-group">
-          <div class="lc-label-row"><label for="lcNama">Nama Pengadu</label><span id="lcTagNama" class="lc-label-badge random">acak</span></div>
-          <div class="lc-input-actions"><input id="lcNama" type="text" required /><button type="button" class="lc-mini-btn" data-reroll="nama">Acak ulang</button></div>
+          <div class="lc-label-row"><label for="lcNama">Nama Pengadu <small class="muted">(opsional)</small></label><span id="lcTagNama" class="lc-label-badge random">acak</span></div>
+          <div class="lc-input-actions"><input id="lcNama" type="text" placeholder="Kosongkan untuk acak" /><button type="button" class="lc-mini-btn" data-reroll="nama">Acak ulang</button></div>
         </div>
         <div class="field-group">
-          <div class="lc-label-row"><label for="lcTanggal">Tanggal Kejadian</label><span id="lcTagTanggal" class="lc-label-badge random">acak</span></div>
-          <div class="lc-input-actions"><input id="lcTanggal" type="date" required /><button type="button" class="lc-mini-btn" data-reroll="tanggal">Acak ulang</button></div>
+          <div class="lc-label-row"><label for="lcTanggal">Tanggal Kejadian <small class="muted">(opsional)</small></label><span id="lcTagTanggal" class="lc-label-badge random">acak</span></div>
+          <div class="lc-input-actions"><input id="lcTanggal" type="date" /><button type="button" class="lc-mini-btn" data-reroll="tanggal">Acak ulang</button></div>
         </div>
         <div class="lc-span-2 field-group">
-          <div class="lc-label-row"><label for="lcAlamat">Alamat Kejadian</label><span id="lcTagAlamat" class="lc-label-badge random">acak</span></div>
-          <div class="lc-input-actions"><input id="lcAlamat" type="text" required /><button type="button" class="lc-mini-btn" data-reroll="alamat">Acak ulang</button></div>
+          <div class="lc-label-row"><label for="lcAlamat">Alamat Kejadian <small class="muted">(opsional)</small></label><span id="lcTagAlamat" class="lc-label-badge random">acak</span></div>
+          <div class="lc-input-actions"><input id="lcAlamat" type="text" placeholder="Kosongkan untuk acak" /><button type="button" class="lc-mini-btn" data-reroll="alamat">Acak ulang</button></div>
         </div>
         <div class="lc-span-2 field-group">
           <div class="lc-label-row"><label for="lcTitik">Titik Lokasi (link maps atau lat,lng)</label><span id="lcTagTitik" class="lc-label-badge random">acak</span></div>
@@ -154,7 +162,7 @@ function renderShell() {
       </form>
       <div class="lc-actions-row">
         <button id="lcBtnStart" type="button" class="btn btn-primary">Mulai Sesi</button>
-        <span id="lcHelp" class="muted" style="font-size:12px;"></span>
+        <span id="lcHelp" class="muted" style="font-size:12px;">Hanya nomor WA penguji yang wajib. Form lainnya otomatis acak/default bila kosong.</span>
       </div>
     </div>
 
@@ -453,11 +461,6 @@ async function startSession() {
     categoryMode: mode,
   };
   if (!body.deviceUuid) { toastLC("Pilih nomor WA penguji terlebih dahulu.", true); return; }
-  if (!body.title) { toastLC("Judul pengaduan wajib diisi.", true); return; }
-  if (!body.reportText) { toastLC("Isi laporan wajib diisi.", true); return; }
-  if (!body.namaPengadu) { toastLC("Nama pengadu wajib diisi.", true); return; }
-  if (!body.tanggalKejadian) { toastLC("Tanggal kejadian wajib diisi.", true); return; }
-  if (!body.alamatKejadian) { toastLC("Alamat kejadian wajib diisi.", true); return; }
 
   try {
     const data = await apiLC("/api/livechat/sessions", { method: "POST", body });

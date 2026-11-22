@@ -35,6 +35,18 @@ func (a waAdapter) RegisterCollector(botPhone string) (ReplyCollector, error) {
 	return &collectorAdapter{c: col}, nil
 }
 func (a waAdapter) Status() model.WAStatus { return a.c.Status() }
+func (a waAdapter) SetPresenceAvailable(ctx context.Context, available bool) {
+	a.c.SetPresenceAvailable(ctx, available)
+}
+func (a waAdapter) MarkBubblesRead(ctx context.Context, phone string, messageIDs []string) error {
+	return a.c.MarkBubblesRead(ctx, phone, messageIDs)
+}
+func (a waAdapter) SimulateTyping(ctx context.Context, phone string, text string, s model.HumanSettings) error {
+	return a.c.SimulateTyping(ctx, phone, text, s)
+}
+func (a waAdapter) PauseTyping(ctx context.Context, phone string) error {
+	return a.c.PauseTyping(ctx, phone)
+}
 
 // collectorAdapter bridges *wa.Collector to ReplyCollector while copying the
 // bubbles into the livechat shape (avoids import cycle in the other direction).
