@@ -1,0 +1,10 @@
+.git
+.github
+*.tmp
+*.log
+wa_session.db-shm
+wa_session.db-wal
+data/backups_secure
+data/users/*/downloads
+node_modules
+wa-bot-tester

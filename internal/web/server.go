@@ -1017,8 +1017,46 @@ func (s *Server) handleReloadEnvForUser(ctx context.Context, userID int64, w htt
 		"settings": settings,
 	})
 }
+func parseExportFilter(r *http.Request) workbench.ExportFilter {
+	q := r.URL.Query()
+	var filter workbench.ExportFilter
+	if sheetsRaw := strings.TrimSpace(q.Get("sheets")); sheetsRaw != "" && sheetsRaw != "all" {
+		for _, s := range strings.Split(sheetsRaw, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				filter.Sheets = append(filter.Sheets, s)
+			}
+		}
+	}
+	filter.Category = strings.TrimSpace(q.Get("category"))
+	if filter.Category == "" {
+		filter.Category = strings.TrimSpace(q.Get("mode"))
+	}
+	filter.ResultStatus = strings.TrimSpace(q.Get("status"))
+	if df := strings.TrimSpace(q.Get("date_from")); df != "" {
+		if t, err := time.Parse("2006-01-02", df); err == nil {
+			filter.DateFrom = t
+		}
+	}
+	if dt := strings.TrimSpace(q.Get("date_to")); dt != "" {
+		if t, err := time.Parse("2006-01-02", dt); err == nil {
+			filter.DateTo = t.Add(24*time.Hour - time.Millisecond)
+		}
+	}
+	return filter
+}
+
 func (s *Server) handleExcelDownloadForUser(ctx context.Context, userID int64, w http.ResponseWriter, r *http.Request) {
-	data, fileName, err := s.tenantStore(ctx, userID).ExportBytes()
+	st := s.tenantStore(ctx, userID)
+	filter := parseExportFilter(r)
+	var data []byte
+	var fileName string
+	var err error
+	if fe, ok := st.(workbench.FilteredExporter); ok {
+		data, fileName, err = fe.ExportBytesFiltered(filter)
+	} else {
+		data, fileName, err = st.ExportBytes()
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

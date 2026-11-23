@@ -60,14 +60,14 @@ func TestExporterWritesAllStatuses(t *testing.T) {
 	}
 	defer f.Close()
 
-	rows, err := f.GetRows("Ringkasan Live Chat")
+	rows, err := f.GetRows(SummarySheet)
 	if err != nil {
 		t.Fatalf("read rows: %v", err)
 	}
 	if len(rows) != 5 { // header + 4 data rows
 		t.Fatalf("expected 5 rows, got %d: %v", len(rows), rows)
 	}
-	// Header A..M
+	// Header A..N
 	for i, want := range summaryHeader {
 		if rows[0][i] != want {
 			t.Fatalf("header col %d = %q, want %q", i, rows[0][i], want)
@@ -81,15 +81,15 @@ func TestExporterWritesAllStatuses(t *testing.T) {
 		"stopped":  "Dihentikan manual: dihentikan pengguna",
 	}
 	for _, r := range rows[1:] {
-		status := r[7]
+		status := r[8]
 		want := wantKeterangan[status]
-		if r[10] != want {
-			t.Fatalf("status=%s keterangan=%q, want %q", status, r[10], want)
-		}
-		if r[11] == "" {
-			t.Fatalf("status=%s last_chat_excerpt missing", status)
+		if r[1] != want {
+			t.Fatalf("status=%s keterangan=%q, want %q", status, r[1], want)
 		}
 		if r[12] == "" {
+			t.Fatalf("status=%s last_chat_excerpt missing", status)
+		}
+		if r[13] == "" {
 			t.Fatalf("status=%s berkas terkirim missing", status)
 		}
 	}
@@ -104,18 +104,18 @@ func TestExporterWritesAllStatuses(t *testing.T) {
 	if err := ex.Export(context.Background(), 900500, sess); err != nil {
 		t.Fatalf("re-export: %v", err)
 	}
-	rows2, _ := f.GetRows("Ringkasan Live Chat") // f may be stale; reopen
+	rows2, _ := f.GetRows(SummarySheet) // f may be stale; reopen
 	_ = rows2
 	f2, _ := excelize.OpenFile(path)
 	defer f2.Close()
-	rows2, _ = f2.GetRows("Ringkasan Live Chat")
+	rows2, _ = f2.GetRows(SummarySheet)
 	if len(rows2) != 5 {
 		t.Fatalf("re-export must not duplicate rows, got %d", len(rows2))
 	}
 	// Locate #1 row and confirm it now says "Renamed".
 	found := false
 	for _, r := range rows2[1:] {
-		if r[0] == "1" && strings.Contains(r[5], "Renamed") {
+		if r[0] == "1" && strings.Contains(r[6], "Renamed") {
 			found = true
 		}
 	}
@@ -176,8 +176,8 @@ func TestExporterUsesAssetLabels(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer f.Close()
-	rows, _ := f.GetRows("Ringkasan Live Chat")
-	got := rows[1][12] // column M
+	rows, _ := f.GetRows(SummarySheet)
+	got := rows[1][13] // column N (Berkas Terkirim)
 	if !strings.Contains(got, "Foto Jalan Rusak") || !strings.Contains(got, "asset#12") {
 		t.Fatalf("expected labelled + fallback ids, got %q", got)
 	}

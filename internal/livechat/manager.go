@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
+	"time"
 
 	"whatshap-gateway/internal/model"
 )
@@ -29,14 +31,6 @@ type Manager struct {
 
 // SettingsProvider returns the persisted human-rhythm settings for a user.
 type SettingsProvider func(ctx context.Context, userID int64) (settings model.HumanSettings, ok bool)
-
-// runHandle groups the engine with its cancel func and completion channel.
-type runHandle struct {
-	sessionID int64
-	engine    *Engine
-	cancel    context.CancelFunc
-	done      chan struct{}
-}
 
 // ManagerOptions wires the manager. All fields are required except MediaRoot
 // (defaults to <UserAssetMediaRoot>) and Emitter (defaults to no-op).
@@ -80,9 +74,53 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 	}, nil
 }
 
+// runHandle groups the engine with its cancel func, active session id and completion channel.
+type runHandle struct {
+	mu        sync.RWMutex
+	sessionID int64
+	engine    *Engine
+	cancel    context.CancelFunc
+	done      chan struct{}
+}
+
+func (h *runHandle) getSessionID() int64 {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.sessionID
+}
+
+func (h *runHandle) setSession(sessID int64, eng *Engine) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sessionID = sessID
+	h.engine = eng
+}
+
+func randBetweenRange(min, max int) int {
+	if max <= min {
+		return min
+	}
+	return rand.Intn(max-min+1) + min
+}
+
 // StartSession creates the DB row and launches one goroutine. It returns the
 // created Session so the HTTP handler can immediately serialise it back.
 func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInput) (Session, error) {
+	return m.StartBatch(ctx, userID, in, 1)
+}
+
+// StartBatch launches a sequential queue of N sessions (repeatCount >= 1).
+// Session 1 starts immediately and is returned to caller. Subsequent sessions
+// run after an inter-session human cooldown (15-30s) with freshly randomized
+// Medan data matching the form template. Canceling via Stop halts the batch immediately.
+func (m *Manager) StartBatch(ctx context.Context, userID int64, in SessionInput, repeatCount int) (Session, error) {
+	if repeatCount <= 0 {
+		repeatCount = 1
+	}
+	if repeatCount > 20 {
+		repeatCount = 20
+	}
+
 	m.mu.Lock()
 	if _, busy := m.active[userID]; busy {
 		m.mu.Unlock()
@@ -90,11 +128,20 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 	}
 	m.mu.Unlock()
 
-	// Attach the device client first so a missing/unconnected device fails
-	// before we create a session row.
 	client, err := m.wa.ClientFor(userID, in.DeviceUUID)
 	if err != nil {
 		return Session{}, err
+	}
+
+	hs := defaultHumanSettings()
+	if v, ok := m.settings(ctx, userID); ok {
+		hs = v
+	}
+
+	// Session 1 title suffix if repeatCount > 1
+	baseTitle := in.Title
+	if repeatCount > 1 {
+		in.Title = fmt.Sprintf("%s (1/%d)", baseTitle, repeatCount)
 	}
 
 	sess, err := m.store.CreateSession(ctx, userID, in)
@@ -102,13 +149,7 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 		return Session{}, err
 	}
 
-	// Pull the user's human-rhythm settings; fall back to defaults when absent.
-	hs := defaultHumanSettings()
-	if v, ok := m.settings(ctx, userID); ok {
-		hs = v
-	}
-
-	engine, err := newEngine(engineConfig{
+	eng1, err := newEngine(engineConfig{
 		Store:     m.store,
 		WA:        client,
 		Responder: m.responder,
@@ -123,7 +164,8 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	handle := &runHandle{sessionID: sess.ID, engine: engine, cancel: cancel, done: make(chan struct{})}
+	handle := &runHandle{sessionID: sess.ID, engine: eng1, cancel: cancel, done: make(chan struct{})}
+
 	m.mu.Lock()
 	m.active[userID] = handle
 	m.mu.Unlock()
@@ -138,17 +180,142 @@ func (m *Manager) StartSession(ctx context.Context, userID int64, in SessionInpu
 			m.mu.Unlock()
 			cancel()
 		}()
-		_ = engine.Run(runCtx)
+
+		// Run session 1
+		_ = eng1.Run(runCtx)
+
+		// Sequential loop for remaining sessions in the batch
+		for iter := 2; iter <= repeatCount; iter++ {
+			select {
+			case <-runCtx.Done():
+				return // batch cancelled by user Stop
+			default:
+			}
+
+			// Pre-check if client is still logged in before waiting or starting
+			if client != nil && !client.Status().LoggedIn {
+				if m.emitter != nil {
+					m.emitter.Emit(handle.getSessionID(), "livechat_batch_info", map[string]any{
+						"userId":  userID,
+						"status":  "aborted",
+						"message": "Perangkat WhatsApp terputus. Batch dihentikan demi keamanan.",
+					})
+				}
+				return
+			}
+
+			// Inter-session human relaxation pause (15-30s anti-ban in production)
+			cooldownMs := randBetweenRange(hs.DelayMinMs, hs.DelayMaxMs)
+			if hs.DelayMaxMs >= 1000 && cooldownMs < 15000 {
+				cooldownMs = 15000
+			}
+			if cooldownMs > 30000 {
+				cooldownMs = 30000
+			}
+
+			if m.emitter != nil {
+				m.emitter.Emit(handle.getSessionID(), "livechat_batch_info", map[string]any{
+					"userId":     userID,
+					"phase":      "cooldown",
+					"current":    iter - 1,
+					"next":       iter,
+					"total":      repeatCount,
+					"cooldownMs": cooldownMs,
+					"message":    fmt.Sprintf("Sesi %d selesai. Jeda anti-ban (%ds) sebelum sesi %d dari %d...", iter-1, cooldownMs/1000, iter, repeatCount),
+				})
+			}
+
+			sleepTimer := time.NewTimer(time.Duration(cooldownMs) * time.Millisecond)
+			select {
+			case <-runCtx.Done():
+				sleepTimer.Stop()
+				return
+			case <-sleepTimer.C:
+			}
+
+			if client != nil && !client.Status().LoggedIn {
+				if m.emitter != nil {
+					m.emitter.Emit(handle.getSessionID(), "livechat_batch_info", map[string]any{
+						"userId":  userID,
+						"status":  "aborted",
+						"message": "Perangkat WhatsApp terputus. Batch dihentikan demi keamanan.",
+					})
+				}
+				return
+			}
+
+			// Fresh seed and random values for this iteration
+			nextSeed := time.Now().UnixNano()
+			nextRng := rand.New(rand.NewSource(nextSeed))
+			preview := GenerateRandomPreview(nextRng, time.Now())
+
+			nextIn := in
+			nextIn.RNGSeed = nextSeed
+			nextIn.Title = fmt.Sprintf("%s (%d/%d)", baseTitle, iter, repeatCount)
+			// Only randomize fields that were empty in original input template
+			if in.NamaPengadu == "" || in.NamaPengadu == sess.NamaPengadu {
+				nextIn.NamaPengadu = preview.NamaPengadu
+			}
+			if in.TanggalKejadian == "" || in.TanggalKejadian == sess.TanggalKejadian {
+				nextIn.TanggalKejadian = preview.TanggalKejadian
+			}
+			if in.AlamatKejadian == "" || in.AlamatKejadian == sess.AlamatKejadian {
+				nextIn.AlamatKejadian = preview.AlamatKejadian
+			}
+			if in.TitikLokasi == "" || in.TitikLokasi == sess.TitikLokasi {
+				nextIn.TitikLokasi = preview.TitikLokasi
+				nextIn.TitikLokasiSrc = SourceRandom
+			}
+
+			nextSess, createErr := m.store.CreateSession(runCtx, userID, nextIn)
+			if createErr != nil {
+				return
+			}
+
+			nextEng, engErr := newEngine(engineConfig{
+				Store:     m.store,
+				WA:        client,
+				Responder: m.responder,
+				Settings:  hs,
+				MediaRoot: m.mediaRoot(userID),
+				AssetRoot: m.assetRoot(userID),
+				Emitter:   m.emitter,
+				Exporter:  m.exporter,
+			}, nextSess)
+			if engErr != nil {
+				return
+			}
+
+			handle.setSession(nextSess.ID, nextEng)
+			if m.emitter != nil {
+				m.emitter.Emit(nextSess.ID, "livechat_session_created", map[string]any{
+					"userId":  userID,
+					"session": nextSess,
+					"current": iter,
+					"total":   repeatCount,
+				})
+			}
+			_ = nextEng.Run(runCtx)
+		}
+
+		if repeatCount > 1 && m.emitter != nil {
+			m.emitter.Emit(handle.getSessionID(), "livechat_batch_info", map[string]any{
+				"userId":  userID,
+				"phase":   "completed",
+				"total":   repeatCount,
+				"message": fmt.Sprintf("Seluruh batch (%d sesi) selesai.", repeatCount),
+			})
+		}
 	}()
 	return sess, nil
 }
 
-// Stop cancels the running session for userID (if it matches sessionID). It
-// returns false when there is nothing to stop.
+// Stop cancels the running session and any remaining queued batch sessions
+// for userID. It returns false when there is nothing to stop.
 func (m *Manager) Stop(userID, sessionID int64) bool {
 	m.mu.Lock()
 	handle, ok := m.active[userID]
-	if !ok || (sessionID > 0 && handle.sessionID != sessionID) {
+	if !ok || (sessionID > 0 && handle.getSessionID() != sessionID) {
 		m.mu.Unlock()
 		return false
 	}
@@ -158,12 +325,12 @@ func (m *Manager) Stop(userID, sessionID int64) bool {
 	return true
 }
 
-// ActiveSessionID returns the running session id for userID, or 0.
+// ActiveSessionID returns the currently executing session id for userID, or 0.
 func (m *Manager) ActiveSessionID(userID int64) int64 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if h, ok := m.active[userID]; ok {
-		return h.sessionID
+		return h.getSessionID()
 	}
 	return 0
 }

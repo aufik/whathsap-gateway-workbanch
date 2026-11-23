@@ -20,9 +20,9 @@ const ExcelFileName = "livechat.xlsx"
 // Workbook columns (plan §9). The order is fixed because the UI download and
 // the tests both assume it.
 var summaryHeader = []string{
-	"No", "Tanggal Sesi", "Nomor WA Penguji", "Nomor WA Bot", "Kategori Mode",
+	"No", "Keterangan", "Tanggal Sesi", "Nomor WA Penguji", "Nomor WA Bot", "Kategori Mode",
 	"Judul Pengaduan", "Jumlah Giliran", "Status Akhir", "Alasan Selesai",
-	"Nomor Tiket", "Keterangan", "Chat Terakhir", "Berkas Terkirim",
+	"Nomor Tiket", "Ringkasan Konfirmasi Bot", "Chat Terakhir", "Berkas Terkirim",
 }
 
 // Exporter writes one row per session to data/users/{id}/livechat.xlsx. Writes
@@ -92,7 +92,7 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 	}
 	defer f.Close()
 
-	const sheet = "Ringkasan Live Chat"
+	const sheet = SummarySheet
 	if idx, err := f.GetSheetIndex(sheet); err != nil || idx < 0 {
 		if _, err := f.NewSheet(sheet); err != nil {
 			return err
@@ -122,6 +122,7 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 	labels := e.labelsFor(ctx, userID, session.AssetIDs)
 	values := []any{
 		row - 1, // No (1-based over data rows)
+		excelKeterangan(session),
 		session.CreatedAt.Format("2006-01-02 15:04"),
 		session.WAPhone,
 		session.BotPhone,
@@ -131,7 +132,7 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 		string(session.Status),
 		session.EndReason,
 		session.TicketNo,
-		excelKeterangan(session),
+		"-",
 		session.LastChatExcerpt,
 		excelBerkasTerkirim(session.AssetIDs, labels),
 	}
@@ -143,10 +144,20 @@ func (e *Exporter) Export(ctx context.Context, userID int64, session Session) er
 	_ = f.SetCellValue(sheet, idCell, session.ID)
 
 	// Wrap long text so the chat excerpt stays readable.
-	_ = f.SetColWidth(sheet, "F", "F", 34)
-	_ = f.SetColWidth(sheet, "I", "I", 32)
-	_ = f.SetColWidth(sheet, "L", "L", 48)
-	_ = f.SetColWidth(sheet, "M", "M", 24)
+	_ = f.SetColWidth(sheet, "A", "A", 6)
+	_ = f.SetColWidth(sheet, "B", "B", 28)
+	_ = f.SetColWidth(sheet, "C", "C", 18)
+	_ = f.SetColWidth(sheet, "D", "D", 18)
+	_ = f.SetColWidth(sheet, "E", "E", 18)
+	_ = f.SetColWidth(sheet, "F", "F", 16)
+	_ = f.SetColWidth(sheet, "G", "G", 34)
+	_ = f.SetColWidth(sheet, "H", "H", 14)
+	_ = f.SetColWidth(sheet, "I", "I", 16)
+	_ = f.SetColWidth(sheet, "J", "J", 28)
+	_ = f.SetColWidth(sheet, "K", "K", 16)
+	_ = f.SetColWidth(sheet, "L", "L", 52)
+	_ = f.SetColWidth(sheet, "M", "M", 38)
+	_ = f.SetColWidth(sheet, "N", "N", 24)
 
 	return writeAtomic(f, path)
 }

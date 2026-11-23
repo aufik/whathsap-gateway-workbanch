@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
@@ -92,15 +94,23 @@ func TestGenerateExcelAllStatuses(t *testing.T) {
 		"stopped":  "Dihentikan manual: dihentikan pengguna",
 	}
 	for _, r := range rows[1:] {
-		status := r[7]
-		if got := r[10]; got != wantKeterangan[status] {
+		status := r[8]
+		if got := r[1]; got != wantKeterangan[status] {
 			t.Fatalf("status=%s keterangan=%q, want %q", status, got, wantKeterangan[status])
 		}
-		if r[0] == "" || r[1] == "" || r[2] == "" || r[3] == "" || r[5] == "" {
+		if r[0] == "" || r[2] == "" || r[3] == "" || r[4] == "" || r[6] == "" {
 			t.Fatalf("kolom wajib kosong pada status=%s: %v", status, r)
 		}
-		if r[11] == "" {
-			t.Fatalf("kolom L (chat terakhir) kosong untuk status=%s", status)
+		if r[12] == "" {
+			t.Fatalf("kolom M (chat terakhir) kosong untuk status=%s", status)
+		}
+	}
+	// Verify custom cell style (colors) is applied to status cells (column I)
+	for rowIdx := 2; rowIdx <= 5; rowIdx++ {
+		cell := fmt.Sprintf("I%d", rowIdx)
+		styleID, err := f.GetCellStyle(SummarySheet, cell)
+		if err != nil || styleID == 0 {
+			t.Fatalf("cell %s must have a colored status style, got styleID=%d, err=%v", cell, styleID, err)
 		}
 	}
 }
@@ -141,9 +151,61 @@ func TestGenerateExcelUsesAssetLabels(t *testing.T) {
 		t.Fatalf("open: %v", err)
 	}
 	defer f.Close()
-	cell, _ := f.GetCellValue(SummarySheet, "M2")
+	cell, _ := f.GetCellValue(SummarySheet, "N2")
 	if cell != "Foto Jalan Rusak" {
-		t.Fatalf("kolom M = %q, want %q", cell, "Foto Jalan Rusak")
+		t.Fatalf("kolom N = %q, want %q", cell, "Foto Jalan Rusak")
+	}
+}
+
+// TestGenerateExcelIncludesConfirmationMessage verifies that bot confirmation recap appears in column L.
+func TestGenerateExcelIncludesConfirmationMessage(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+	st := NewStore(db)
+	const userID int64 = 900953
+	cleanupUser(t, db, userID)
+	defer cleanupUser(t, db, userID)
+
+	ctx := context.Background()
+	sess, err := st.CreateSession(ctx, userID, sampleInput())
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	confQuestion := "*Baik*, *Lampiran Berkas* dilewati.\n\nBerikut ringkasan aduan Anda:\n• *Nama Pengadu*: Nurul Aini\n• *Judul Laporan*: Saya Nurul Aini pak\nApakah sudah sesuai untuk dikirim?\n# 171158"
+	if _, err := st.InsertTurn(ctx, userID, Turn{
+		SessionID:    sess.ID,
+		TurnNo:       1,
+		BotQuestion:  confQuestion,
+		QuestionKind: "konfirmasi",
+		OurAnswer:    "Ya, sudah sesuai",
+		CategoryMode: "benar",
+		MatchStatus:  "cocok",
+	}); err != nil {
+		t.Fatalf("insert turn: %v", err)
+	}
+	if err := st.FinishSession(ctx, userID, sess.ID, StatusFinished, "tiket terbit", "171158", "Selesai"); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+
+	data, _, err := GenerateExcel(ctx, st, userID)
+	if err != nil {
+		t.Fatalf("GenerateExcel: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+
+	colLHeader, _ := f.GetCellValue(SummarySheet, "L1")
+	if colLHeader != "Ringkasan Konfirmasi Bot" {
+		t.Fatalf("L1 header = %q, want %q", colLHeader, "Ringkasan Konfirmasi Bot")
+	}
+
+	colLVal, _ := f.GetCellValue(SummarySheet, "L2")
+	if !strings.Contains(colLVal, "Berikut ringkasan aduan Anda") || !strings.Contains(colLVal, "Nurul Aini") {
+		t.Fatalf("L2 confirmation text mismatch: got %q", colLVal)
 	}
 }
 

@@ -158,6 +158,7 @@ type startSessionRequest struct {
 	AssetIDs        []int64 `json:"assetIds"`
 	MaxTurns        int     `json:"maxTurns"`
 	CategoryMode    string  `json:"categoryMode"`
+	RepeatCount     int     `json:"repeatCount"`
 }
 
 // POST /api/livechat/sessions
@@ -245,7 +246,15 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		writeErr(w, http.StatusBadRequest, errors.New("batas giliran maksimal 200"))
 		return
 	}
-	sess, err := h.manager.StartSession(r.Context(), userID, livechat.SessionInput{
+	repeatCount := req.RepeatCount
+	if repeatCount <= 0 {
+		repeatCount = 1
+	}
+	if repeatCount > 20 {
+		repeatCount = 20
+	}
+
+	sess, err := h.manager.StartBatch(r.Context(), userID, livechat.SessionInput{
 		DeviceUUID:      req.DeviceUUID,
 		WAPhone:         devicePhone(r.Context(), h.server, userID, req.DeviceUUID),
 		BotPhone:        botPhone,
@@ -260,7 +269,7 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		MaxTurns:        maxTurns,
 		CategoryMode:    mode,
 		RNGSeed:         seed,
-	})
+	}, repeatCount)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -443,7 +452,25 @@ func (h *livechatHandlers) handleExcelDownload(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	data, fileName, err := livechat.GenerateExcel(r.Context(), h.store, userID)
+	q := r.URL.Query()
+	var lcFilter livechat.LiveChatFilter
+	lcFilter.CategoryMode = strings.TrimSpace(q.Get("mode"))
+	if lcFilter.CategoryMode == "" {
+		lcFilter.CategoryMode = strings.TrimSpace(q.Get("category"))
+	}
+	lcFilter.Status = strings.TrimSpace(q.Get("status"))
+	if df := strings.TrimSpace(q.Get("date_from")); df != "" {
+		if t, err := time.Parse("2006-01-02", df); err == nil {
+			lcFilter.DateFrom = t
+		}
+	}
+	if dt := strings.TrimSpace(q.Get("date_to")); dt != "" {
+		if t, err := time.Parse("2006-01-02", dt); err == nil {
+			lcFilter.DateTo = t.Add(24*time.Hour - time.Millisecond)
+		}
+	}
+
+	data, fileName, err := livechat.GenerateExcel(r.Context(), h.store, userID, lcFilter)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

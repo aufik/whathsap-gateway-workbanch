@@ -606,10 +606,13 @@ func (s *DBStore) ReplaceFromBytes(uploaded []byte) (model.OverallSummary, error
 }
 
 // ExportBytes menghasilkan workbook di memori dari data PostgreSQL.
-// Diimplementasikan pada Tahap 8 (internal/workbench/export.go); untuk saat
-// ini mengembalikan error eksplisit agar tidak diam-diam salah.
 func (s *DBStore) ExportBytes() ([]byte, string, error) {
 	return s.exportWorkbook()
+}
+
+// ExportBytesFiltered menghasilkan workbook di memori dengan filter sheet, kategori/mode, dan rentang tanggal.
+func (s *DBStore) ExportBytesFiltered(filter ExportFilter) ([]byte, string, error) {
+	return s.exportWorkbook(filter)
 }
 
 // --- internal helpers (implementasi di dbstore_queries.go) ---

@@ -1,34 +1,54 @@
-# Secrets & local config
-.env
+# ==============================================================================
+# Git Ignore: WA Bot QA Workbench & Live Chat Gateway
+# ==============================================================================
 
-# WhatsApp SQLite session files
+# Kredensial, Rahasia, dan Konfigurasi Lokal
+.env
+.env.*
+!.env.example
+
+# Berkas Binary & Kompilasi
+wa-bot-tester
+*.exe
+*.dll
+*.so
+*.dylib
+
+# SQLite WhatsApp Session & Protocol Storage (Krusial: Jangan ter-commit)
 *.db
 *.db-shm
 *.db-wal
+data/users/*/wa/**
 
-# Temporary, metrics sidecar, & backup Excel files
-*.tmp
-*.backup.xlsx
-*.metrics.json
-
-# Downloaded WhatsApp bot media files
-data/downloads/*
+# Berkas Gambar & Media Hasil Pengujian Bot (Krusial: Berat & Dinamis)
+*.png
+*.jpg
+*.jpeg
+*.webp
+data/downloads/**
 !data/downloads/.gitkeep
+data/users/*/downloads/**
+data/users/*/livechat_media/**
+data/users/*/livechat_assets/**
 
-# Compiled binary
-wa-bot-tester
-
-# Windows metadata artifact
-*:Zone.Identifier
-# Pre-work backups for the live-chat module (local only, may contain .env copy + user data)
-data/backups_secure/livechat_pre_*/
-data/backups_secure/workbench_pre_*/
-
-# Live Chat Emulator runtime artifacts (per-user, generated while testing)
-data/users/*/livechat.xlsx
-data/users/*/livechat.xlsx.tmp
-data/users/*/livechat_assets/
-data/users/*/livechat_media/
-
-# Workbench runtime template (dihasilkan ulang oleh cmd/workbench-seed-template)
+# Berkas Excel Runtime, Cadangan, dan Metrik Sidecar
+*.tmp
+*.bak
+*.tar.gz
+*.backup.xlsx
+*.backup_tested.xlsx
+*.metrics.json
+data/users/*/*.xlsx
+data/users/*/*.xlsx.tmp
+data/users/*/*.metrics.json
 data/templates/*.xlsx
+!data/templates/.gitkeep
+
+# Direktori Arsip Backup Internal
+data/backups_secure/**
+
+# Artifacts & Log
+*.log
+node_modules/
+.dockerignore.bak
+*:Zone.Identifier

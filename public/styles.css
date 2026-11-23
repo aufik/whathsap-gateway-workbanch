@@ -627,15 +627,60 @@ textarea:focus {
 .col-a {
   width: 295px;
 }
+.filter-box {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
 .col-timing {
   width: 215px;
 }
-.col-device {
-  width: 140px;
+.col-time {
+  width: 130px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11.5px;
   color: var(--text-muted);
   vertical-align: top;
+}
+.chat-time-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-time-date {
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 11px;
+}
+.chat-time-hour {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.col-device {
+  width: 155px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  vertical-align: top;
+}
+.device-dual-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.device-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-light);
+  min-width: 34px;
 }
 .device-phone-badge {
   display: inline-block;

@@ -138,6 +138,10 @@ function renderShell() {
           <div class="lc-label-row"><label for="lcMaxTurns">Batas Giliran</label></div>
           <input id="lcMaxTurns" type="number" min="1" max="200" value="40" />
         </div>
+        <div class="field-group">
+          <div class="lc-label-row"><label for="lcRepeatCount">Jumlah Sesi (Perulangan)</label></div>
+          <input id="lcRepeatCount" type="number" min="1" max="20" value="1" title="Menjalankan N sesi berturut-turut secara otomatis dengan data acak baru per sesi (jeda anti-ban 15-30 dtk antar-sesi)" />
+        </div>
         <div class="lc-span-2 field-group">
           <div class="lc-label-row"><label for="lcTitle">Judul Pengaduan <small class="muted">(opsional)</small></label></div>
           <input id="lcTitle" type="text" maxlength="200" placeholder="Kosongkan untuk otomatis dari waktu sesi" />
@@ -594,12 +598,14 @@ async function startSession() {
     assetIds: [...LC.selectedAssetIds],
     maxTurns,
     categoryMode: mode,
+    repeatCount: parseInt(document.getElementById("lcRepeatCount") ? document.getElementById("lcRepeatCount").value : "1", 10) || 1,
   };
   if (!body.deviceUuid) { toastLC("Pilih nomor WA penguji terlebih dahulu.", true); return; }
 
   try {
     const data = await apiLC("/api/livechat/sessions", { method: "POST", body });
-    toastLC("Sesi dimulai. Pantau emulator di bawah.");
+    const count = body.repeatCount || 1;
+    toastLC(count > 1 ? `Batch ${count} sesi dimulai secara berurutan. Pantau emulator di bawah.` : "Sesi dimulai. Pantau emulator di bawah.");
     LC.liveSessions.set(data.session.id, {
       session: data.session, messages: [], turns: [], typing: false,
     });
@@ -697,6 +703,28 @@ function handleSSE(evt) {
   if (!evt || !evt.type) return;
   if (!evt.type.startsWith("livechat_")) return;
   const p = evt.payload || {};
+
+  if (evt.type === "livechat_batch_info") {
+    if (p.message) toastLC(p.message, p.status === "aborted");
+    loadSessions();
+    return;
+  }
+
+  if (evt.type === "livechat_session_created" && p.session) {
+    const s = p.session;
+    if (!LC.liveSessions.has(s.id)) {
+      LC.liveSessions.set(s.id, {
+        session: s,
+        messages: [],
+        turns: [],
+        typing: false,
+      });
+      renderEmulatorGrid();
+      loadSessions();
+    }
+    return;
+  }
+
   const sid = p.sessionId;
   if (!sid) return;
   const state = LC.liveSessions.get(sid);
@@ -722,6 +750,10 @@ function handleSSE(evt) {
   }
   if (evt.type === "livechat_status") {
     loadSessions();
+    if (!state && p.status === "running") {
+      loadSessionDetail(sid).then(() => renderEmulatorGrid());
+      return;
+    }
     if (state) {
       state.session.status = p.status;
       state.typing = false;

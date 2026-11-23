@@ -233,9 +233,9 @@
               <th class="col-q">Pertanyaan Acuan vs Diinput</th>
               <th class="col-a">Balasan Sesuai Data (Bank)</th>
               <th class="col-a">Balasan Dikirim Sistem (WA)</th>
+              <th class="col-time">Waktu Chat</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
-              <th class="col-device">WA Pengirim</th>
-              <th class="col-device">WA Target</th>
+              <th class="col-device">WA Pengirim &amp; Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
@@ -326,9 +326,9 @@
               <th class="col-q">Pertanyaan Acuan vs Diinput (Diluar Bank)</th>
               <th class="col-a">Perilaku Bot yang Diharapkan</th>
               <th class="col-a">Balasan Dikirim Sistem</th>
+              <th class="col-time">Waktu Chat</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
-              <th class="col-device">WA Pengirim</th>
-              <th class="col-device">WA Target</th>
+              <th class="col-device">WA Pengirim &amp; Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
@@ -419,9 +419,9 @@
               <th class="col-q">Pertanyaan Chat Warga (Diinput ke Bot)</th>
               <th class="col-a">Perilaku Bot yang Diharapkan</th>
               <th class="col-a">Balasan Dikirim Sistem</th>
+              <th class="col-time">Waktu Chat</th>
               <th class="col-timing">Detail Waktu &amp; Ritme Manusia</th>
-              <th class="col-device">WA Pengirim</th>
-              <th class="col-device">WA Target</th>
+              <th class="col-device">WA Pengirim &amp; Target</th>
               <th class="col-res">Evaluasi &amp; Aksi</th>
             </tr>
           </thead>
@@ -1177,6 +1177,84 @@
             </div>
           </form>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Filter Download Excel -->
+  <div id="modalExportExcel" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalExportTitle">
+    <div class="modal-card modal-medium">
+      <div class="modal-header">
+        <h3 id="modalExportTitle" style="margin:0;">Filter Unduh Laporan Excel</h3>
+        <button id="btnCloseExportModal" class="btn-icon" type="button" aria-label="Tutup">&times;</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- 1. Pilihan Lembar Kerja (Sheets) -->
+        <div class="filter-box">
+          <label style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">1. Pilih Lembar Kerja (Sheets)</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="expSheetBank" checked value="bank" /> Bank Pertanyaan (210)</label>
+            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="expSheetLiveChat" checked value="livechat" /> Pengaduan (Live Chat)</label>
+            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="expSheetOOB" checked value="oob" /> Uji Diluar Bank (52)</label>
+            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="expSheetStress" checked value="stress" /> Uji Stress AI (15)</label>
+            <label class="checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer; grid-column:span 2;"><input type="checkbox" id="expSheetSummary" checked value="summary" /> Ringkasan &amp; Petunjuk OPD</label>
+          </div>
+        </div>
+
+        <!-- 2. Filter Kategori / Mode & Status -->
+        <div class="filter-box">
+          <label style="font-weight:700; font-size:13px; margin-bottom:8px; display:block;">2. Kategori / Mode &amp; Status</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="expCategoryMode" style="font-size:11.5px; color:var(--text-muted); margin-bottom:4px; display:block;">Mode / Kategori</label>
+              <select id="expCategoryMode" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface);">
+                <option value="all">Semua Mode / Kategori (Default)</option>
+                <option value="benar">Live Chat: Mode Benar</option>
+                <option value="typo">Live Chat: Mode Typo</option>
+                <option value="ngasal">Live Chat: Mode Ngasal</option>
+                <option value="celah">Live Chat: Mode Cari Celah</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="expStatus" style="font-size:11.5px; color:var(--text-muted); margin-bottom:4px; display:block;">Status Pengujian</label>
+              <select id="expStatus" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface);">
+                <option value="all">Semua Status (Default)</option>
+                <option value="Cocok">Hanya Cocok / Lolos / Selesai</option>
+                <option value="Tidak">Hanya Tidak Cocok / Gagal / Timeout</option>
+                <option value="BelumDiuji">Hanya Belum Diuji</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Rentang Tanggal Pengujian -->
+        <div class="filter-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label style="font-weight:700; font-size:13px; margin:0;">3. Rentang Tanggal Pengujian</label>
+            <div style="display:flex; gap:4px;">
+              <button type="button" class="btn btn-xs btn-outline" id="expQuickAll">Semua</button>
+              <button type="button" class="btn btn-xs btn-outline" id="expQuickToday">Hari Ini</button>
+              <button type="button" class="btn btn-xs btn-outline" id="expQuick7d">7 Hari</button>
+              <button type="button" class="btn btn-xs btn-outline" id="expQuick30d">30 Hari</button>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="field-group">
+              <label for="expDateFrom" style="font-size:11.5px; color:var(--text-muted); margin-bottom:4px; display:block;">Dari Tanggal</label>
+              <input type="date" id="expDateFrom" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface);" />
+            </div>
+            <div class="field-group">
+              <label for="expDateTo" style="font-size:11.5px; color:var(--text-muted); margin-bottom:4px; display:block;">Sampai Tanggal</label>
+              <input type="date" id="expDateTo" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface);" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
+        <button type="button" class="btn btn-outline" id="btnCancelExport">Batal</button>
+        <button type="button" class="btn btn-primary" id="btnExecuteExport">
+          📥 Unduh Excel (.xlsx)
+        </button>
       </div>
     </div>
   </div>

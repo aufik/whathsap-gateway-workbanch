@@ -491,3 +491,120 @@ func TestEngineDoesNotWriteLivechatFile(t *testing.T) {
 		t.Fatalf("walk: %v", err)
 	}
 }
+
+type fakeResolver struct {
+	wa *fakeWA
+}
+
+func (r fakeResolver) ClientFor(int64, string) (WAClient, error) {
+	return r.wa, nil
+}
+
+// TestManagerStartBatch verifies sequential loop for multiple repeatCount sessions.
+func TestManagerStartBatch(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	fake := newFakeWA(
+		"Pengaduan Anda telah kami terima #991122",
+		"Pengaduan Anda telah kami terima #991123",
+	)
+
+	mgr, err := NewManager(ManagerOptions{
+		Store:     st,
+		Assets:    NewAssetService(st, t.TempDir()),
+		Responder: &Responder{},
+		WA:        fakeResolver{wa: fake},
+		Settings: func(context.Context, int64) (model.HumanSettings, bool) {
+			s := fastSettings()
+			s.DelayMinMs = 1
+			s.DelayMaxMs = 1
+			return s, true
+		},
+		MediaRoot: func(int64) string { return t.TempDir() },
+		AssetRoot: func(int64) string { return t.TempDir() },
+		Emitter:   NopEmitter{},
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	in := sampleInput()
+	in.Title = "Batch Test"
+	firstSess, err := mgr.StartBatch(context.Background(), uid, in, 2)
+	if err != nil {
+		t.Fatalf("StartBatch: %v", err)
+	}
+	if !strings.Contains(firstSess.Title, "(1/2)") {
+		t.Fatalf("session 1 title should contain (1/2), got %q", firstSess.Title)
+	}
+
+	// Wait for batch to finish (both sessions)
+	timeout := time.After(5 * time.Second)
+	for {
+		if mgr.ActiveSessionID(uid) == 0 {
+			break
+		}
+		select {
+		case <-timeout:
+			mgr.Stop(uid, 0)
+			t.Fatalf("timed out waiting for batch sessions to complete")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+
+	list, err := st.ListSessions(context.Background(), uid, 10)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(list) < 2 {
+		t.Fatalf("expected at least 2 sessions created in batch, got %d", len(list))
+	}
+}
+
+// TestManagerStopBatch verifies that calling Stop during a batch cancels remaining queue.
+func TestManagerStopBatch(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	fake := newFakeWA() // blocks in Wait
+	fake.collector.onWait = func() { time.Sleep(50 * time.Millisecond) }
+
+	mgr, err := NewManager(ManagerOptions{
+		Store:     st,
+		Assets:    NewAssetService(st, t.TempDir()),
+		Responder: &Responder{},
+		WA:        fakeResolver{wa: fake},
+		Settings: func(context.Context, int64) (model.HumanSettings, bool) {
+			return fastSettings(), true
+		},
+		MediaRoot: func(int64) string { return t.TempDir() },
+		AssetRoot: func(int64) string { return t.TempDir() },
+		Emitter:   NopEmitter{},
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	in := sampleInput()
+	sess, err := mgr.StartBatch(context.Background(), uid, in, 5)
+	if err != nil {
+		t.Fatalf("StartBatch: %v", err)
+	}
+
+	// Allow session 1 to start, then stop
+	time.Sleep(30 * time.Millisecond)
+	stopped := mgr.Stop(uid, sess.ID)
+	if !stopped {
+		t.Fatalf("expected Stop to succeed")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	list, err := st.ListSessions(context.Background(), uid, 10)
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	// Only session 1 should have been created, sessions 2-5 never started
+	if len(list) != 1 {
+		t.Fatalf("batch cancellation should prevent subsequent sessions, got %d sessions", len(list))
+	}
+	if list[0].Status != StatusStopped {
+		t.Fatalf("session 1 should be stopped, got %s", list[0].Status)
+	}
+}

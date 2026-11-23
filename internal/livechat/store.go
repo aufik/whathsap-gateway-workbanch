@@ -339,6 +339,62 @@ func (s *Store) GetSessionDetail(ctx context.Context, userID, sessionID int64) (
 	return detail, trs.Err()
 }
 
+// ListConfirmationSummaries returns a map of sessionID -> confirmation message text
+// (the bot turn asking to confirm the complaint details, e.g. "Berikut ringkasan aduan Anda:...").
+// It first looks in livechat.turns for KindKonfirmasi/recap questions, falling back to
+// livechat.messages if needed.
+func (s *Store) ListConfirmationSummaries(ctx context.Context, sessionIDs []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT ON (session_id) session_id, coalesce(bot_question, '')
+		FROM livechat.turns
+		WHERE session_id = ANY($1)
+		  AND (question_kind = 'konfirmasi' OR bot_question ILIKE '%ringkasan aduan%' OR bot_question ILIKE '%sudah sesuai untuk dikirim%')
+		ORDER BY session_id, turn_no DESC`, pq.Array(sessionIDs))
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var sid int64
+			var text string
+			if err := rows.Scan(&sid, &text); err == nil && strings.TrimSpace(text) != "" {
+				out[sid] = text
+			}
+		}
+	}
+
+	var missing []int64
+	for _, sid := range sessionIDs {
+		if _, ok := out[sid]; !ok {
+			missing = append(missing, sid)
+		}
+	}
+	if len(missing) > 0 {
+		msgRows, err := s.db.QueryContext(ctx, `
+			SELECT DISTINCT ON (session_id) session_id, coalesce(body, '')
+			FROM livechat.messages
+			WHERE session_id = ANY($1)
+			  AND direction = 'received'
+			  AND (body ILIKE '%ringkasan aduan%' OR body ILIKE '%sudah sesuai untuk dikirim%')
+			ORDER BY session_id, id DESC`, pq.Array(missing))
+		if err == nil {
+			defer msgRows.Close()
+			for msgRows.Next() {
+				var sid int64
+				var text string
+				if err := msgRows.Scan(&sid, &text); err == nil && strings.TrimSpace(text) != "" {
+					out[sid] = text
+				}
+			}
+		}
+	}
+
+	return out, nil
+}
+
 // UpdateSessionProgress persists a single bot/our turn's contribution to the
 // session header (turn count + ticket if detected). It is idempotent enough for
 // the engine's writes: turn count is the caller's authoritative value.

@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/xuri/excelize/v2"
 
 	"whatshap-gateway/internal/excel"
+	"whatshap-gateway/internal/livechat"
 	"whatshap-gateway/internal/model"
 )
 
@@ -109,7 +112,7 @@ func TestExportEmptyUser(t *testing.T) {
 		t.Fatalf("hasil bukan xlsx valid: %v", err)
 	}
 	defer f.Close()
-	for _, sheet := range []string{excel.SheetBank, excel.SheetOutOfBank, excel.SheetStress} {
+	for _, sheet := range []string{excel.SheetBank, excel.SheetOutOfBank, excel.SheetStress, livechat.SummarySheet} {
 		idx, err := f.GetSheetIndex(sheet)
 		if err != nil || idx < 0 {
 			t.Fatalf("sheet %s hilang", sheet)
@@ -158,7 +161,7 @@ func TestExportEmbedsPictures(t *testing.T) {
 		t.Fatalf("xlsx tidak valid: %v", err)
 	}
 	defer f.Close()
-	pics, err := f.GetPictures(excel.SheetBank, "H3")
+	pics, err := f.GetPictures(excel.SheetBank, "J3")
 	if err != nil {
 		t.Fatalf("GetPictures: %v", err)
 	}
@@ -270,4 +273,125 @@ func stressProjection(r model.StressTestRow) string {
 		r.No, r.ExcelRow, r.StressCategory, r.UserPromptQ, r.IntentPurpose,
 		r.ExpectedBehavior, r.ActualReply, r.HumanSummary, r.Notes,
 		r.PolitenessScore, r.HallucinationLvl)
+}
+
+func TestExportIncludesChatTimeAndPhones(t *testing.T) {
+	f := buildMinimalWorkbook()
+	defer f.Close()
+
+	bankRows := []model.TestRow{
+		{
+			No: 1, OPD: "Dinas Kominfo", Kategori: "Layanan", StatusBank: "approved",
+			QuestionRef: "Pertanyaan", QuestionInput: "Input", ExpectedReply: "Acuan",
+			ActualReply: "Jawaban", Notes: "Catatan", ResultStatus: "Cocok",
+			Metrics: model.RowHumanMetrics{
+				TestedAt:       1763460000000,
+				SenderPhone:    "6281234567890@s.whatsapp.net",
+				BotTargetPhone: "6289876543210",
+			},
+		},
+	}
+	note := func(string) {}
+	if err := fillBankSheet(f, bankRows, nil, note); err != nil {
+		t.Fatalf("fillBankSheet: %v", err)
+	}
+
+	valK2, _ := f.GetCellValue(excel.SheetBank, "K2")
+	valL2, _ := f.GetCellValue(excel.SheetBank, "L2")
+	valM2, _ := f.GetCellValue(excel.SheetBank, "M2")
+	if valK2 != "Waktu Chat" || valL2 != "WA Pengirim" || valM2 != "WA Target" {
+		t.Fatalf("header mismatch: K2=%q L2=%q M2=%q", valK2, valL2, valM2)
+	}
+
+	valK3, _ := f.GetCellValue(excel.SheetBank, "K3")
+	valL3, _ := f.GetCellValue(excel.SheetBank, "L3")
+	valM3, _ := f.GetCellValue(excel.SheetBank, "M3")
+	if valK3 != "2025-11-18 17:00:00" && valK3 != time.UnixMilli(1763460000000).Format("2006-01-02 15:04:05") {
+		t.Fatalf("testedAt mismatch: got %q", valK3)
+	}
+	if valL3 != "6281234567890" {
+		t.Fatalf("sender mismatch: got %q want 6281234567890", valL3)
+	}
+	if valM3 != "6289876543210" {
+		t.Fatalf("target mismatch: got %q want 6289876543210", valM3)
+	}
+}
+
+func TestExportBytesFilteredSheetsAndStatus(t *testing.T) {
+	db := openParityDB(t)
+	defer db.Close()
+	cleanupParity(t, db)
+	ensureParityUser(t, db)
+	defer cleanupParity(t, db)
+
+	store, err := NewDBStore(db, parityUserID)
+	if err != nil {
+		t.Fatalf("NewDBStore: %v", err)
+	}
+
+	raw, _, err := store.ExportBytesFiltered(ExportFilter{
+		Sheets: []string{"livechat"},
+	})
+	if err != nil {
+		t.Fatalf("ExportBytesFiltered: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+
+	if idx, _ := f.GetSheetIndex(livechat.SummarySheet); idx < 0 {
+		t.Fatalf("sheet %s must exist in filtered export", livechat.SummarySheet)
+	}
+	if idx, _ := f.GetSheetIndex(excel.SheetBank); idx >= 0 {
+		t.Fatalf("sheet %s must be excluded in filtered export", excel.SheetBank)
+	}
+}
+
+func TestDashboardOPDTableAndChart(t *testing.T) {
+	db := openParityDB(t)
+	defer db.Close()
+	cleanupParity(t, db)
+	ensureParityUser(t, db)
+	defer cleanupParity(t, db)
+
+	_ = seedBankRow(db, model.TestRow{No: 1, ExcelRow: 3, OPD: "Dinas Kominfo", ResultStatus: "Cocok"})
+	_ = seedBankRow(db, model.TestRow{No: 2, ExcelRow: 4, OPD: "Dinas Kominfo", ResultStatus: "Tidak"})
+	_ = seedBankRow(db, model.TestRow{No: 3, ExcelRow: 5, OPD: "Dinas Kesehatan", ResultStatus: "Cocok"})
+
+	store, err := NewDBStore(db, parityUserID)
+	if err != nil {
+		t.Fatalf("NewDBStore: %v", err)
+	}
+
+	raw, _, err := store.ExportBytes()
+	if err != nil {
+		t.Fatalf("ExportBytes: %v", err)
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer f.Close()
+
+	idx, err := f.GetSheetIndex(SheetDashboardOPD)
+	if err != nil || idx < 0 {
+		t.Fatalf("sheet %s tidak ditemukan", SheetDashboardOPD)
+	}
+
+	title, _ := f.GetCellValue(SheetDashboardOPD, "A1")
+	if !strings.Contains(title, "DASHBOARD PERFORMA") {
+		t.Fatalf("title mismatch: %q", title)
+	}
+
+	kpiTotal, _ := f.GetCellValue(SheetDashboardOPD, "A4")
+	if !strings.Contains(kpiTotal, "TOTAL SOAL") {
+		t.Fatalf("kpiTotal mismatch: %q", kpiTotal)
+	}
+
+	thOPD, _ := f.GetCellValue(SheetDashboardOPD, "B6")
+	if thOPD != "Nama OPD / Unit Layanan" {
+		t.Fatalf("thOPD mismatch: %q", thOPD)
+	}
 }

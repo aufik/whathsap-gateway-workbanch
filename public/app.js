@@ -119,6 +119,31 @@ function renderTargetPhoneHTML(m) {
   return `<span class="device-phone-badge">${escapeHTML(clean)}</span>`;
 }
 
+function renderChatTimeHTML(testedAt) {
+  if (!testedAt) {
+    return `<span class="reply-empty">-</span>`;
+  }
+  const d = new Date(testedAt);
+  if (isNaN(d.getTime())) {
+    return `<span class="reply-empty">-</span>`;
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `<div class="chat-time-box"><span class="chat-time-date">${dateStr}</span><span class="chat-time-hour">${timeStr}</span></div>`;
+}
+
+function renderDeviceDualStackHTML(m, rowNo) {
+  const sender = renderSenderPhoneHTML(m, rowNo);
+  const target = renderTargetPhoneHTML(m);
+  return `
+    <div class="device-dual-stack">
+      <div class="device-row"><span class="device-tag">Dari:</span>${sender}</div>
+      <div class="device-row"><span class="device-tag">Ke:</span>${target}</div>
+    </div>
+  `;
+}
+
 function renderTimingCardHTML(m) {
   if (!m || (!m.typingMs && !m.testedAt && !m.unreadDelayMs)) {
     return `<div class="timing-badge-box"><span class="reply-empty">Belum diuji</span></div>`;
@@ -813,9 +838,9 @@ function buildRowInnerHTML(r) {
     </td>
     <td class="col-a">${formatReplyHTML(r.expectedReply, null)}</td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
+    <td class="col-time">${renderChatTimeHTML(r.metrics?.testedAt)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
-    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
-    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
+    <td class="col-device">${renderDeviceDualStackHTML(r.metrics, r.no)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
         <div>${resBadge} ${disconnectHtml}</div>
@@ -868,9 +893,9 @@ function buildOOBRowInnerHTML(r) {
       <div style="font-size:12px; color:var(--text-muted)">${escapeHTML(r.expectedBehavior)}</div>
     </td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
+    <td class="col-time">${renderChatTimeHTML(r.metrics?.testedAt)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
-    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
-    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
+    <td class="col-device">${renderDeviceDualStackHTML(r.metrics, r.no)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
         <div>${resBadge} ${disconnectHtml}</div>
@@ -921,9 +946,9 @@ function buildStressRowInnerHTML(r) {
       <div style="font-size:12px; color:var(--text-muted)">${escapeHTML(r.expectedBehavior)}</div>
     </td>
     <td class="col-a">${formatReplyHTML(r.actualReply, r.mediaFiles)}</td>
+    <td class="col-time">${renderChatTimeHTML(r.metrics?.testedAt)}</td>
     <td class="col-timing">${renderTimingCardHTML(r.metrics)}</td>
-    <td class="col-device">${renderSenderPhoneHTML(r.metrics, r.no)}</td>
-    <td class="col-device">${renderTargetPhoneHTML(r.metrics)}</td>
+    <td class="col-device">${renderDeviceDualStackHTML(r.metrics, r.no)}</td>
     <td class="col-res">
       <div class="row-actions-stack">
         <div>${resBadge} ${disconnectHtml}</div>
@@ -2392,3 +2417,88 @@ loadDevices();
 
 bindAccountEvents();
 loadCurrentUser();
+
+function setupExportModal() {
+  const btnOpen = el("btnDownloadExcel");
+  const modal = el("modalExportExcel");
+  const btnClose = el("btnCloseExportModal");
+  const btnCancel = el("btnCancelExport");
+  const btnExecute = el("btnExecuteExport");
+
+  if (!btnOpen || !modal) return;
+
+  btnOpen.addEventListener("click", (e) => {
+    e.preventDefault();
+    modal.classList.remove("hidden");
+  });
+
+  const closeModal = () => modal.classList.add("hidden");
+  if (btnClose) btnClose.addEventListener("click", closeModal);
+  if (btnCancel) btnCancel.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  const dateFrom = el("expDateFrom");
+  const dateTo = el("expDateTo");
+  const fmtDate = (d) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
+  el("expQuickAll")?.addEventListener("click", () => {
+    if (dateFrom) dateFrom.value = "";
+    if (dateTo) dateTo.value = "";
+  });
+  el("expQuickToday")?.addEventListener("click", () => {
+    const today = fmtDate(new Date());
+    if (dateFrom) dateFrom.value = today;
+    if (dateTo) dateTo.value = today;
+  });
+  el("expQuick7d")?.addEventListener("click", () => {
+    const now = new Date();
+    const past = new Date(now.getTime() - 7 * 86400000);
+    if (dateFrom) dateFrom.value = fmtDate(past);
+    if (dateTo) dateTo.value = fmtDate(now);
+  });
+  el("expQuick30d")?.addEventListener("click", () => {
+    const now = new Date();
+    const past = new Date(now.getTime() - 30 * 86400000);
+    if (dateFrom) dateFrom.value = fmtDate(past);
+    if (dateTo) dateTo.value = fmtDate(now);
+  });
+
+  if (btnExecute) {
+    btnExecute.addEventListener("click", () => {
+      const sheets = [];
+      if (el("expSheetBank")?.checked) sheets.push("bank");
+      if (el("expSheetLiveChat")?.checked) sheets.push("livechat");
+      if (el("expSheetOOB")?.checked) sheets.push("oob");
+      if (el("expSheetStress")?.checked) sheets.push("stress");
+      if (el("expSheetSummary")?.checked) sheets.push("summary");
+
+      if (sheets.length === 0) {
+        toast("Pilih minimal satu lembar kerja (sheet) untuk diunduh.", true);
+        return;
+      }
+
+      const category = el("expCategoryMode")?.value || "all";
+      const status = el("expStatus")?.value || "all";
+      const df = dateFrom?.value || "";
+      const dt = dateTo?.value || "";
+
+      const params = new URLSearchParams();
+      params.set("sheets", sheets.join(","));
+      if (category !== "all") params.set("category", category);
+      if (status !== "all") params.set("status", status);
+      if (df) params.set("date_from", df);
+      if (dt) params.set("date_to", dt);
+
+      closeModal();
+      toast("Menyiapkan unduhan Excel sesuai filter...");
+      window.location.href = `/api/excel/download?${params.toString()}`;
+    });
+  }
+}
+
+setupExportModal();
