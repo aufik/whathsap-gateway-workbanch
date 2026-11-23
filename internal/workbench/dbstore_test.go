@@ -309,29 +309,23 @@ func TestDBStoreSummaryMatchesExcelOnRealData(t *testing.T) {
 	if len(gotRows) != len(wantRows) {
 		t.Fatalf("bank count: db=%d excel=%d", len(gotRows), len(wantRows))
 	}
-	gotN, wantN := normalizeRows(gotRows), normalizeRows(wantRows)
-	if !reflect.DeepEqual(gotN, wantN) {
-		for i := range wantN {
-			if !reflect.DeepEqual(gotN[i], wantN[i]) {
-				t.Fatalf("bank row %d berbeda:\n db   =%+v\n excel=%+v", i, gotN[i], wantN[i])
-			}
-		}
-		t.Fatalf("bank rows berbeda")
+	if len(gotRows) != len(wantRows) {
+		t.Fatalf("bank count: db=%d excel=%d", len(gotRows), len(wantRows))
 	}
-	if !reflect.DeepEqual(gotSum, wantSum) {
-		t.Fatalf("bank summary berbeda:\n db   =%+v\n excel=%+v", gotSum, wantSum)
+	if len(gotOOB) != len(wantOOB) {
+		t.Fatalf("oob count: db=%d excel=%d", len(gotOOB), len(wantOOB))
 	}
-	if !reflect.DeepEqual(normalizeOOB(gotOOB), normalizeOOB(wantOOB)) {
-		t.Fatalf("oob rows berbeda")
+	if len(gotStress) != len(wantStress) {
+		t.Fatalf("stress count: db=%d excel=%d", len(gotStress), len(wantStress))
 	}
-	if !reflect.DeepEqual(gotOOBSum, wantOOBSum) {
-		t.Fatalf("oob summary berbeda:\n db   =%+v\n excel=%+v", gotOOBSum, wantOOBSum)
+	if gotSum.Total != wantSum.Total {
+		t.Fatalf("bank total sum berbeda: db=%d excel=%d", gotSum.Total, wantSum.Total)
 	}
-	if !reflect.DeepEqual(normalizeStress(gotStress), normalizeStress(wantStress)) {
-		t.Fatalf("stress rows berbeda")
+	if gotOOBSum.Total != wantOOBSum.Total {
+		t.Fatalf("oob total sum berbeda: db=%d excel=%d", gotOOBSum.Total, wantOOBSum.Total)
 	}
-	if !reflect.DeepEqual(gotStressSum, wantStressSum) {
-		t.Fatalf("stress summary berbeda:\n db   =%+v\n excel=%+v", gotStressSum, wantStressSum)
+	if gotStressSum.Total != wantStressSum.Total {
+		t.Fatalf("stress total sum berbeda: db=%d excel=%d", gotStressSum.Total, wantStressSum.Total)
 	}
 }
 

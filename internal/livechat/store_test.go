@@ -140,6 +140,16 @@ func TestStoreSessionCRUDAndCascade(t *testing.T) {
 		t.Fatalf("isolation broken: u2 saw %d rows (err=%v)", len(listU2), err)
 	}
 
+	// 2b. ListSessionsPaged
+	paged, err := st.ListSessionsPaged(ctx, u1, SessionFilter{Page: 1, PageSize: 10, Status: "running"})
+	if err != nil || paged.Total != 1 || len(paged.Sessions) != 1 {
+		t.Fatalf("paged error: total=%d sessions=%d err=%v", paged.Total, len(paged.Sessions), err)
+	}
+	pagedFinished, err := st.ListSessionsPaged(ctx, u1, SessionFilter{Page: 1, PageSize: 10, Status: "finished"})
+	if err != nil || pagedFinished.Total != 0 {
+		t.Fatalf("filter finished should return 0, got %d", pagedFinished.Total)
+	}
+
 	// 3. Get detail only when owned
 	detail, err := st.GetSessionDetail(ctx, u1, sess.ID)
 	if err != nil {

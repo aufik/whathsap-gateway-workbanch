@@ -98,13 +98,26 @@ func (h *livechatHandlers) handleListSessions(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	sessions, err := h.store.ListSessions(r.Context(), userID, limit)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if pageSize <= 0 {
+		pageSize, _ = strconv.Atoi(r.URL.Query().Get("limit"))
+	}
+	filter := livechat.SessionFilter{
+		Page:     page,
+		PageSize: pageSize,
+		Status:   r.URL.Query().Get("status"),
+		Mode:     r.URL.Query().Get("mode"),
+		Query:    r.URL.Query().Get("q"),
+		SortBy:   r.URL.Query().Get("sort"),
+	}
+
+	result, err := h.store.ListSessionsPaged(r.Context(), userID, filter)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	writeJSON(w, http.StatusOK, result)
 }
 
 // GET /api/livechat/sessions/{id}

@@ -140,3 +140,22 @@ type SessionDetail struct {
 	Messages []Message `json:"messages"`
 	Turns    []Turn    `json:"turns"`
 }
+
+// SessionFilter specifies criteria for paginated session listing.
+type SessionFilter struct {
+	Page     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
+	Status   string `json:"status"`   // "running", "finished", "failed", "timeout", "stopped"
+	Mode     string `json:"mode"`     // "benar", "typo", "ngasal", "celah"
+	Query    string `json:"query"`    // search title, ticket_no, or bot_phone
+	SortBy   string `json:"sortBy"`   // "date_desc", "date_asc", "turns_desc", "turns_asc"
+}
+
+// SessionPageResult holds paginated session records.
+type SessionPageResult struct {
+	Sessions   []Session `json:"sessions"`
+	Total      int       `json:"total"`
+	Page       int       `json:"page"`
+	PageSize   int       `json:"pageSize"`
+	TotalPages int       `json:"totalPages"`
+}

@@ -13,6 +13,18 @@ const LC = {
   sessions: [],
   liveSessions: new Map(), // sessionId -> {session, messages, turns, typing}
   activeDetailId: 0,
+  activeDetailData: null,
+  detailViewTab: "chat", // "chat" or "audit"
+  pagination: {
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    totalPages: 1,
+    status: "all",
+    mode: "all",
+    query: "",
+    sort: "date_desc",
+  },
   eventsAbort: null,
 };
 
@@ -173,9 +185,42 @@ function renderShell() {
 
     <div class="lc-card">
       <div class="lc-label-row" style="margin-bottom:6px">
-        <h3 class="lc-section-title" style="margin:0">Riwayat Sesi</h3>
+        <h3 class="lc-section-title" style="margin:0">Riwayat Sesi (<span id="lcHistoryTotalCount">0</span>)</h3>
         <button id="lcBtnRefreshHistory" type="button" class="lc-mini-btn">Muat ulang</button>
       </div>
+
+      <div class="lc-history-toolbar">
+        <div class="lc-toolbar-group">
+          <input id="lcFilterQuery" type="text" placeholder="Cari judul / no tiket / bot..." class="lc-search-input" />
+          <select id="lcFilterStatus">
+            <option value="all">Semua Status</option>
+            <option value="finished">Selesai (Finished)</option>
+            <option value="running">Sedang Berjalan</option>
+            <option value="failed">Gagal (Failed)</option>
+            <option value="timeout">Timeout</option>
+            <option value="stopped">Dihentikan</option>
+          </select>
+          <select id="lcFilterMode">
+            <option value="all">Semua Mode</option>
+            <option value="benar">Benar</option>
+            <option value="typo">Typo</option>
+            <option value="ngasal">Ngasal</option>
+            <option value="celah">Cari Celah</option>
+          </select>
+          <select id="lcFilterSort">
+            <option value="date_desc">Terbaru</option>
+            <option value="date_asc">Terlama</option>
+            <option value="turns_desc">Giliran Terbanyak</option>
+            <option value="turns_asc">Giliran Tersedikit</option>
+          </select>
+          <select id="lcFilterPageSize">
+            <option value="10">10 / hal</option>
+            <option value="25">25 / hal</option>
+            <option value="50">50 / hal</option>
+          </select>
+        </div>
+      </div>
+
       <div class="table-wrapper">
         <table class="lc-history-table">
           <thead>
@@ -187,6 +232,20 @@ function renderShell() {
           <tbody id="lcHistoryBody"><tr><td colspan="7" class="muted">Memuat...</td></tr></tbody>
         </table>
       </div>
+
+      <div class="lc-pagination-bar">
+        <div class="lc-page-info">
+          Menampilkan <span id="lcPageFrom">0</span>-<span id="lcPageTo">0</span> dari <span id="lcPageTotal">0</span> sesi
+        </div>
+        <div class="lc-page-controls">
+          <button id="lcBtnPageFirst" type="button" class="lc-mini-btn" title="Halaman Pertama">&laquo;</button>
+          <button id="lcBtnPagePrev" type="button" class="lc-mini-btn" title="Sebelumnya">&lsaquo;</button>
+          <span id="lcPageCurrent">Halaman 1 dari 1</span>
+          <button id="lcBtnPageNext" type="button" class="lc-mini-btn" title="Berikutnya">&rsaquo;</button>
+          <button id="lcBtnPageLast" type="button" class="lc-mini-btn" title="Halaman Terakhir">&raquo;</button>
+        </div>
+      </div>
+
       <div id="lcDetailPanel" class="lc-detail-panel" hidden></div>
     </div>
   `;
@@ -222,11 +281,24 @@ async function loadAssets() {
   }
 }
 
-async function loadSessions() {
+async function loadSessions(resetPage = false) {
+  if (resetPage) LC.pagination.page = 1;
+  const p = LC.pagination;
+  const qParams = new URLSearchParams({
+    page: String(p.page),
+    pageSize: String(p.pageSize),
+    status: p.status,
+    mode: p.mode,
+    q: p.query,
+    sort: p.sort,
+  });
   try {
-    const data = await apiLC("/api/livechat/sessions");
+    const data = await apiLC("/api/livechat/sessions?" + qParams.toString());
     LC.sessions = data.sessions || [];
+    p.total = data.total != null ? data.total : (data.sessions || []).length;
+    p.totalPages = data.totalPages != null ? data.totalPages : 1;
     renderHistory();
+    renderPaginationBar();
     // Preload active ones into memory (for the grid). Only sessions still
     // running, plus the last 3 finished, to keep initial load light.
     const candidates = LC.sessions
@@ -386,57 +458,120 @@ function buildTypingIndicator() {
 function renderHistory() {
   const body = document.getElementById("lcHistoryBody");
   if (!body) return;
+  const countEl = document.getElementById("lcHistoryTotalCount");
+  if (countEl) countEl.textContent = String(LC.pagination.total);
   if (LC.sessions.length === 0) {
-    body.innerHTML = `<tr><td colspan="7" class="muted">Belum ada sesi.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:18px;">Tidak ada sesi yang cocok dengan filter.</td></tr>`;
     return;
   }
+  const startNo = (LC.pagination.page - 1) * LC.pagination.pageSize;
   body.innerHTML = LC.sessions
     .map((s, idx) => `
-      <tr data-detail-id="${s.id}">
-        <td>${idx + 1}</td>
+      <tr data-detail-id="${s.id}" class="${LC.activeDetailId === s.id ? "active-row" : ""}">
+        <td>${startNo + idx + 1}</td>
         <td>${formatDate(s.createdAt)}</td>
-        <td>${escapeText(s.title || "")}</td>
-        <td>${escapeText(s.categoryMode || "")}</td>
+        <td><strong>${escapeText(s.title || "")}</strong></td>
+        <td><span class="muted">${escapeText(s.categoryMode || "")}</span></td>
         <td>${s.totalTurns || 0}</td>
         <td><span class="lc-chat-badge ${escapeText(s.status || "")}">${escapeText(s.status || "")}</span></td>
-        <td>${escapeText(s.ticketNo || "")}</td>
+        <td>${escapeText(s.ticketNo || "-")}</td>
       </tr>
     `)
     .join("");
+}
+
+function renderPaginationBar() {
+  const p = LC.pagination;
+  const from = p.total === 0 ? 0 : (p.page - 1) * p.pageSize + 1;
+  const to = Math.min(p.page * p.pageSize, p.total);
+  const fromEl = document.getElementById("lcPageFrom");
+  const toEl = document.getElementById("lcPageTo");
+  const totalEl = document.getElementById("lcPageTotal");
+  const curEl = document.getElementById("lcPageCurrent");
+  if (fromEl) fromEl.textContent = String(from);
+  if (toEl) toEl.textContent = String(to);
+  if (totalEl) totalEl.textContent = String(p.total);
+  if (curEl) curEl.textContent = `Halaman ${p.page} dari ${p.totalPages}`;
+
+  const btnFirst = document.getElementById("lcBtnPageFirst");
+  const btnPrev = document.getElementById("lcBtnPagePrev");
+  const btnNext = document.getElementById("lcBtnPageNext");
+  const btnLast = document.getElementById("lcBtnPageLast");
+  if (btnFirst) btnFirst.disabled = p.page <= 1;
+  if (btnPrev) btnPrev.disabled = p.page <= 1;
+  if (btnNext) btnNext.disabled = p.page >= p.totalPages;
+  if (btnLast) btnLast.disabled = p.page >= p.totalPages;
 }
 
 function renderDetailPanel(detail) {
   const panel = document.getElementById("lcDetailPanel");
   if (!panel) return;
   if (!detail) { panel.hidden = true; panel.innerHTML = ""; return; }
+  LC.activeDetailData = detail;
   const s = detail.session;
+  const isChat = LC.detailViewTab === "chat";
+
   const rowsHtml = (detail.turns || []).map((t) => `
     <tr>
       <td>${t.turnNo}</td>
-      <td>${escapeText(t.questionKind || "")}</td>
+      <td><span class="lc-label-badge ${t.questionKind === "konfirmasi" ? "manual" : "random"}">${escapeText(t.questionKind || "")}</span></td>
       <td>${escapeText(t.botQuestion || "")}</td>
-      <td>${escapeText(t.ourAnswer || "")}</td>
-      <td>${escapeText(t.matchStatus || "")}</td>
+      <td><strong>${escapeText(t.ourAnswer || "")}</strong></td>
+      <td><span class="lc-chat-badge ${escapeText(t.matchStatus || "")}">${escapeText(t.matchStatus || "")}</span></td>
     </tr>
   `).join("");
+
+  const bubblesHtml = (detail.messages || []).map((m) => {
+    const kind = m.msgType || m.msg_type || "text";
+    const dir = m.direction || "sent";
+    const time = formatClock(m.sentAt || m.sent_at);
+    const inner = renderBubbleContent(m, kind, s.id);
+    return `<div class="lc-bubble ${dir}">${inner}<span class="lc-time">${time}</span></div>`;
+  }).join("");
+
   panel.innerHTML = `
-    <h3>Detail Sesi #${s.id} &mdash; ${escapeText(s.title || "")}</h3>
+    <div class="lc-detail-header-row">
+      <h3>Detail Sesi #${s.id} &mdash; ${escapeText(s.title || "Pengaduan")}</h3>
+      <button id="lcBtnCloseDetail" type="button" class="lc-mini-btn" style="color:var(--danger);font-weight:600;">✕ Tutup Detail</button>
+    </div>
     <div class="lc-detail-meta">
-      <div>Status: <strong>${escapeText(s.status || "")}</strong></div>
+      <div>Status: <strong><span class="lc-chat-badge ${escapeText(s.status || "")}">${escapeText(s.status || "")}</span></strong></div>
       <div>Mode: <strong>${escapeText(s.categoryMode || "")}</strong></div>
       <div>Giliran: <strong>${s.totalTurns || 0}</strong></div>
-      <div>Nomor WA: <strong>${escapeText(s.waPhone || "")}</strong></div>
-      <div>Bot: <strong>${escapeText(s.botPhone || "")}</strong></div>
-      <div>Tiket: <strong>${escapeText(s.ticketNo || "-")}</strong></div>
+      <div>Penguji (WA): <strong>${escapeText(s.waPhone || s.deviceUuid)}</strong></div>
+      <div>Bot Target: <strong>${escapeText(s.botPhone || "-")}</strong></div>
+      <div>Nomor Tiket: <strong>${escapeText(s.ticketNo || "-")}</strong></div>
       <div style="grid-column: span 3">Alasan Selesai: <strong>${escapeText(s.endReason || "-")}</strong></div>
-      <div style="grid-column: span 3">Chat Terakhir: <em>${escapeText(s.lastChatExcerpt || "-")}</em></div>
+      <div style="grid-column: span 3">Cuplikan Akhir: <em>${escapeText(s.lastChatExcerpt || "-")}</em></div>
     </div>
-    <div class="table-wrapper">
-      <table class="lc-history-table">
-        <thead><tr><th>#</th><th>Jenis</th><th>Pertanyaan Bot</th><th>Jawaban Kita</th><th>Status</th></tr></thead>
-        <tbody>${rowsHtml || '<tr><td colspan="5" class="muted">Belum ada log per giliran.</td></tr>'}</tbody>
-      </table>
+
+    <div class="lc-detail-tabs">
+      <button type="button" class="lc-detail-tab-btn ${isChat ? "active" : ""}" data-detail-tab="chat">💬 Simulasi Chat WhatsApp (${(detail.messages || []).length} pesan)</button>
+      <button type="button" class="lc-detail-tab-btn ${!isChat ? "active" : ""}" data-detail-tab="audit">📋 Log Audit QC per Giliran (${(detail.turns || []).length} giliran)</button>
     </div>
+
+    ${isChat ? `
+      <div class="lc-detail-chat-frame">
+        <div class="lc-chat-header">
+          <div class="lc-avatar">${escapeText(initials(s.waPhone))}</div>
+          <div class="lc-meta">
+            <span class="lc-phone">${escapeText(s.waPhone || s.deviceUuid)} &rarr; ${escapeText(s.botPhone || "Bot")}</span>
+            <span class="lc-sub">${escapeText(s.title || "Pengaduan")} &bull; ${formatDate(s.createdAt)}</span>
+          </div>
+          <span class="lc-chat-badge ${escapeText(s.status || "")}">${escapeText(s.status || "")}</span>
+        </div>
+        <div class="lc-detail-chat-body">
+          ${bubblesHtml || '<div class="muted" style="padding:24px;text-align:center;">Tidak ada riwayat pesan tersimpan.</div>'}
+        </div>
+      </div>
+    ` : `
+      <div class="table-wrapper">
+        <table class="lc-history-table">
+          <thead><tr><th>#</th><th>Jenis Pertanyaan</th><th>Pertanyaan Bot</th><th>Jawaban Kita</th><th>Status</th></tr></thead>
+          <tbody>${rowsHtml || '<tr><td colspan="5" class="muted" style="text-align:center;padding:16px;">Belum ada log per giliran.</td></tr>'}</tbody>
+        </table>
+      </div>
+    `}
   `;
   panel.hidden = false;
 }
@@ -566,22 +701,23 @@ function handleSSE(evt) {
   if (!sid) return;
   const state = LC.liveSessions.get(sid);
   if (evt.type === "livechat_message" && state) {
-    state.messages.push({
+    const msg = {
       direction: p.direction,
       msgType: p.msgType,
       body: p.body,
       mediaJson: p.mediaJson,
       sentAt: new Date().toISOString(),
-    });
+    };
+    state.messages.push(msg);
     if (p.direction === "sent") state.typing = false;
     if (p.direction === "received") state.typing = false;
-    refreshCardAndScroll(sid);
+    appendMessageBubble(sid, msg);
     return;
   }
   if (evt.type === "livechat_turn" && state) {
     state.turns.push(p);
     state.typing = true; // anticipating the next bot reply
-    refreshCardAndScroll(sid);
+    updateTypingIndicator(sid, true);
     return;
   }
   if (evt.type === "livechat_status") {
@@ -596,17 +732,31 @@ function handleSSE(evt) {
   }
 }
 
-function refreshCardAndScroll(sid) {
+function appendMessageBubble(sid, msg) {
   const card = document.querySelector(`.lc-chat-card[data-session-id="${sid}"]`);
-  const state = LC.liveSessions.get(sid);
-  if (!card || !state) return;
+  if (!card) return;
   const body = card.querySelector(`.lc-chat-body[data-body-id="${sid}"]`);
+  if (!body) return;
   const typing = body.querySelector(".lc-typing");
   if (typing) typing.remove();
-  const last = state.messages[state.messages.length - 1];
-  if (last) body.appendChild(buildBubble(last, sid));
-  if (state.typing) body.appendChild(buildTypingIndicator());
+  body.appendChild(buildBubble(msg, sid));
   body.scrollTop = body.scrollHeight;
+}
+
+function updateTypingIndicator(sid, isTyping) {
+  const card = document.querySelector(`.lc-chat-card[data-session-id="${sid}"]`);
+  if (!card) return;
+  const body = card.querySelector(`.lc-chat-body[data-body-id="${sid}"]`);
+  if (!body) return;
+  const typing = body.querySelector(".lc-typing");
+  if (isTyping) {
+    if (!typing) {
+      body.appendChild(buildTypingIndicator());
+      body.scrollTop = body.scrollHeight;
+    }
+  } else {
+    if (typing) typing.remove();
+  }
 }
 
 // --- events binding ---
@@ -696,6 +846,76 @@ function bindEvents() {
     const tr = e.target.closest("tr[data-detail-id]");
     if (!tr) return;
     openDetail(parseInt(tr.dataset.detailId, 10));
+  });
+
+  // Filter toolbar listeners
+  const filterInput = document.getElementById("lcFilterQuery");
+  let filterTimer = null;
+  filterInput.addEventListener("input", () => {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => {
+      LC.pagination.query = filterInput.value.trim();
+      loadSessions(true);
+    }, 350);
+  });
+  document.getElementById("lcFilterStatus").addEventListener("change", (e) => {
+    LC.pagination.status = e.target.value;
+    loadSessions(true);
+  });
+  document.getElementById("lcFilterMode").addEventListener("change", (e) => {
+    LC.pagination.mode = e.target.value;
+    loadSessions(true);
+  });
+  document.getElementById("lcFilterSort").addEventListener("change", (e) => {
+    LC.pagination.sort = e.target.value;
+    loadSessions(true);
+  });
+  document.getElementById("lcFilterPageSize").addEventListener("change", (e) => {
+    LC.pagination.pageSize = parseInt(e.target.value, 10) || 10;
+    loadSessions(true);
+  });
+
+  // Pagination navigation buttons
+  document.getElementById("lcBtnPageFirst").addEventListener("click", () => {
+    if (LC.pagination.page > 1) {
+      LC.pagination.page = 1;
+      loadSessions();
+    }
+  });
+  document.getElementById("lcBtnPagePrev").addEventListener("click", () => {
+    if (LC.pagination.page > 1) {
+      LC.pagination.page--;
+      loadSessions();
+    }
+  });
+  document.getElementById("lcBtnPageNext").addEventListener("click", () => {
+    if (LC.pagination.page < LC.pagination.totalPages) {
+      LC.pagination.page++;
+      loadSessions();
+    }
+  });
+  document.getElementById("lcBtnPageLast").addEventListener("click", () => {
+    if (LC.pagination.page < LC.pagination.totalPages) {
+      LC.pagination.page = LC.pagination.totalPages;
+      loadSessions();
+    }
+  });
+
+  // Detail panel tabs & close button
+  document.getElementById("lcDetailPanel").addEventListener("click", (e) => {
+    const tabBtn = e.target.closest("[data-detail-tab]");
+    if (tabBtn) {
+      LC.detailViewTab = tabBtn.dataset.detailTab;
+      renderDetailPanel(LC.activeDetailData);
+      return;
+    }
+    const closeBtn = e.target.closest("#lcBtnCloseDetail");
+    if (closeBtn) {
+      LC.activeDetailId = 0;
+      LC.activeDetailData = null;
+      document.getElementById("lcDetailPanel").hidden = true;
+      document.getElementById("lcDetailPanel").innerHTML = "";
+    }
   });
 }
 

@@ -174,6 +174,105 @@ func (s *Store) ListSessions(ctx context.Context, userID int64, limit int) ([]Se
 	return out, rows.Err()
 }
 
+// ListSessionsPaged returns paginated session headers with filtering and sorting.
+func (s *Store) ListSessionsPaged(ctx context.Context, userID int64, filter SessionFilter) (SessionPageResult, error) {
+	if userID <= 0 {
+		return SessionPageResult{}, errors.New("user id tidak valid")
+	}
+	page := filter.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := filter.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	where := []string{"user_id = $1"}
+	args := []any{userID}
+	paramIdx := 2
+
+	if s := strings.TrimSpace(filter.Status); s != "" && s != "all" {
+		where = append(where, fmt.Sprintf("status = $%d", paramIdx))
+		args = append(args, s)
+		paramIdx++
+	}
+	if m := strings.TrimSpace(filter.Mode); m != "" && m != "all" {
+		where = append(where, fmt.Sprintf("category_mode = $%d", paramIdx))
+		args = append(args, m)
+		paramIdx++
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		like := "%" + q + "%"
+		where = append(where, fmt.Sprintf("(title ILIKE $%d OR ticket_no ILIKE $%d OR bot_phone ILIKE $%d)", paramIdx, paramIdx, paramIdx))
+		args = append(args, like)
+		paramIdx++
+	}
+
+	whereClause := strings.Join(where, " AND ")
+
+	// Count total
+	countQuery := "SELECT COUNT(*) FROM livechat.sessions WHERE " + whereClause
+	var total int
+	if err := s.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return SessionPageResult{}, err
+	}
+
+	// Order by
+	orderBy := "created_at DESC, id DESC"
+	switch filter.SortBy {
+	case "date_asc":
+		orderBy = "created_at ASC, id ASC"
+	case "turns_desc":
+		orderBy = "total_turns DESC, created_at DESC"
+	case "turns_asc":
+		orderBy = "total_turns ASC, created_at ASC"
+	}
+
+	offset := (page - 1) * pageSize
+	dataQuery := fmt.Sprintf(`
+		SELECT `+sessionColumns+`
+		FROM livechat.sessions
+		WHERE %s
+		ORDER BY %s
+		LIMIT $%d OFFSET $%d`, whereClause, orderBy, paramIdx, paramIdx+1)
+	args = append(args, pageSize, offset)
+
+	rows, err := s.db.QueryContext(ctx, dataQuery, args...)
+	if err != nil {
+		return SessionPageResult{}, err
+	}
+	defer rows.Close()
+
+	sessions := make([]Session, 0, pageSize)
+	for rows.Next() {
+		sess, err := scanSession(rows)
+		if err != nil {
+			return SessionPageResult{}, err
+		}
+		sessions = append(sessions, sess)
+	}
+	if err := rows.Err(); err != nil {
+		return SessionPageResult{}, err
+	}
+
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	return SessionPageResult{
+		Sessions:   sessions,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
 // GetSessionDetail returns the session plus its messages and turns, scoped to
 // userID so leaked IDs from another tenant return ErrNotFound.
 func (s *Store) GetSessionDetail(ctx context.Context, userID, sessionID int64) (SessionDetail, error) {
