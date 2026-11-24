@@ -395,6 +395,9 @@ function populateSettingsUI() {
   if (document.activeElement !== el("selectQuestionMode")) {
     el("selectQuestionMode").value = s.questionMode || "natural";
   }
+  if (el("selectAIEngine") && s.aiEngine && document.activeElement !== el("selectAIEngine")) {
+    el("selectAIEngine").value = s.aiEngine;
+  }
 
   el("cfgPreThinkMin").value = s.preThinkMinMs;
   el("cfgPreThinkMax").value = s.preThinkMaxMs;
@@ -424,14 +427,29 @@ function populateSettingsUI() {
 
 function renderAIStatus() {
   const ai = state.ai;
-  if (!ai) return;
-  const badge = el("aiEngineBadge");
-  if (ai.enabled) {
-    badge.textContent = `LLM Aktif: ${ai.model}`;
-    badge.title = ai.provider;
+  const sel = el("selectAIEngine");
+  const testBtn = el("btnTestLLM");
+  if (!sel) return;
+
+  const currentVal = (state.settings && state.settings.aiEngine) || (ai && ai.enabled ? "llm" : "local");
+
+  if (ai && ai.enabled) {
+    sel.disabled = false;
+    sel.innerHTML = `
+      <option value="llm">⚡ LLM Online (${escapeHTML(ai.model)})</option>
+      <option value="local">🏠 Smart Local Engine (Offline / Heuristik)</option>
+    `;
+    sel.value = currentVal === "local" ? "local" : "llm";
+    sel.title = `Provider: ${ai.provider} • Model: ${ai.model}`;
+    if (testBtn) testBtn.disabled = false;
   } else {
-    badge.textContent = "Smart Local Engine (100% Gratis / Offline)";
-    badge.title = "Berjalan lokal di Go tanpa biaya API eksternal";
+    sel.disabled = true;
+    sel.innerHTML = `
+      <option value="local">Smart Local Engine (100% Gratis / Offline)</option>
+    `;
+    sel.value = "local";
+    sel.title = "LLM belum diatur di .env (berjalan lokal di Go)";
+    if (testBtn) testBtn.disabled = true;
   }
 }
 
@@ -1413,6 +1431,9 @@ function bindEvents() {
   // Settings Save & Presets
   el("btnSaveQuickSettings").addEventListener("click", () => saveSettingsFromInputs());
   el("selectQuestionMode").addEventListener("change", () => saveSettingsFromInputs());
+  if (el("selectAIEngine")) {
+    el("selectAIEngine").addEventListener("change", () => saveSettingsFromInputs());
+  }
   el("formHumanSettings").addEventListener("submit", (e) => {
     e.preventDefault();
     saveSettingsFromInputs();
@@ -2127,6 +2148,7 @@ async function saveSettingsFromInputs(silent = false) {
   const payload = {
     botPhone: el("inputBotPhone").value.trim(),
     questionMode: el("selectQuestionMode").value,
+    aiEngine: el("selectAIEngine") ? el("selectAIEngine").value : "llm",
     preThinkMinMs: Number(el("cfgPreThinkMin").value),
     preThinkMaxMs: Number(el("cfgPreThinkMax").value),
     typingMsPerChar: Number(el("cfgTypingPerChar").value),

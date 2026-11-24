@@ -59,9 +59,11 @@
         </div>
 
         <div class="field-group">
-          <label>Mesin Bahasa &amp; Evaluator</label>
+          <label for="selectAIEngine">Mesin Bahasa &amp; Evaluator</label>
           <div class="ai-control-inline">
-            <div id="aiEngineBadge" class="info-pill">Memuat status engine...</div>
+            <select id="selectAIEngine" class="ai-select-engine">
+              <option value="local">Memuat status engine...</option>
+            </select>
             <button id="btnTestLLM" class="btn btn-outline btn-xs" type="button" title="Kirim prompt uji ke provider LLM">⚡ Tes Ping LLM</button>
             <button id="btnReloadEnv" class="btn btn-outline btn-xs" type="button" title="Baca ulang file .env tanpa restart server">🔄 Reload .env</button>
           </div>

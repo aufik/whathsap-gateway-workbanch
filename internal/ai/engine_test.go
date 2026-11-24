@@ -207,3 +207,29 @@ func TestOutOfBankGenerationAndAntiHallucinationEvaluator(t *testing.T) {
 		t.Fatalf("expected polite deflection to score Cocok, got: %q score=%d hal=%s", sStatus, score, hal)
 	}
 }
+
+func TestAIEngineContextOverrideLocal(t *testing.T) {
+	cfg := &config.AppConfig{
+		LLMBaseURL:   "http://mock-llm.local",
+		LLMModel:     "test-model",
+		LLMTimeoutMs: 5000,
+	}
+	eng := NewEngine(cfg)
+
+	// Default context: LLM is enabled
+	if !eng.IsLLMEnabled(context.Background()) {
+		t.Fatalf("expected LLM to be enabled when configured")
+	}
+
+	// Context with engine="local": LLM is forced disabled
+	localCtx := ContextWithAIEngine(context.Background(), "local")
+	if eng.IsLLMEnabled(localCtx) {
+		t.Fatalf("expected LLM to be disabled when ContextWithAIEngine is 'local'")
+	}
+
+	// Context with engine="llm": LLM remains enabled
+	llmCtx := ContextWithAIEngine(context.Background(), "llm")
+	if !eng.IsLLMEnabled(llmCtx) {
+		t.Fatalf("expected LLM to be enabled when ContextWithAIEngine is 'llm'")
+	}
+}

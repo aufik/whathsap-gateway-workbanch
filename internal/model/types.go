@@ -178,6 +178,7 @@ type OverallSummary struct {
 type HumanSettings struct {
 	BotPhone            string       `json:"botPhone"`
 	QuestionMode        QuestionMode `json:"questionMode"`
+	AIEngine            string       `json:"aiEngine,omitempty"` // "llm" | "local" (empty defaults to "llm" if enabled)
 	PreThinkMinMs       int          `json:"preThinkMinMs"`
 	PreThinkMaxMs       int          `json:"preThinkMaxMs"`
 	TypingMsPerChar     int          `json:"typingMsPerChar"`

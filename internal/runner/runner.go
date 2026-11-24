@@ -719,6 +719,7 @@ func (r *Runner) executeBankRow(
 	prevQueueDelayMs int,
 	prevBreakKind string,
 ) bool {
+	ctx = ai.ContextWithAIEngine(ctx, settings.AIEngine)
 	row, ok := r.store.GetRow(rowNo)
 	if !ok {
 		return true
@@ -819,6 +820,7 @@ func (r *Runner) executeOutOfBankRow(
 	prevQueueDelayMs int,
 	prevBreakKind string,
 ) bool {
+	ctx = ai.ContextWithAIEngine(ctx, settings.AIEngine)
 	row, ok := r.store.GetOutOfBankRow(rowNo)
 	if !ok {
 		return true
@@ -904,6 +906,7 @@ func (r *Runner) executeStressTestRow(
 	prevQueueDelayMs int,
 	prevBreakKind string,
 ) bool {
+	ctx = ai.ContextWithAIEngine(ctx, settings.AIEngine)
 	row, ok := r.store.GetStressTestRow(rowNo)
 	if !ok {
 		return true

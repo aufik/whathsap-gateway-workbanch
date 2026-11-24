@@ -17,7 +17,7 @@ type aiHookAdapter struct {
 }
 
 func (a *aiHookAdapter) ComposeAnswer(ctx context.Context, mode livechat.CategoryMode, kind livechat.QuestionKind, draft, botQuestion string) (string, error) {
-	if a.engine == nil || !a.engine.IsLLMEnabled() {
+	if a.engine == nil || !a.engine.IsLLMEnabled(ctx) {
 		return "", nil
 	}
 	sys := buildLiveChatSystemPrompt(mode)

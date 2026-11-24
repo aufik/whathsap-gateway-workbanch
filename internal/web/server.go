@@ -479,6 +479,8 @@ func (s *Server) handleRowGenerateForUser(ctx context.Context, userID int64, w h
 
 	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 
 	generated, err := s.aiEngine.GenerateQuestion(ctx, row, mode, time.Now().UnixNano())
 	if err != nil {
@@ -521,6 +523,8 @@ func (s *Server) handleRowReevaluateForUser(ctx context.Context, userID int64, w
 
 	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 	status, notes := s.aiEngine.EvaluateReply(ctx, row, row.ActualReply)
 
 	updated, sum, err := s.tenantStore(ctx, userID).UpdateRow(no, model.RowPatch{
@@ -574,6 +578,8 @@ func (s *Server) handleOOBGenerateForUser(ctx context.Context, userID int64, w h
 	bankRows, _ := s.tenantStore(ctx, userID).Snapshot()
 	ctx, cancel := context.WithTimeout(r.Context(), 18*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 
 	candidates := s.aiEngine.GenerateOutOfBankProbes(ctx, bankRows, req)
 	rows, sum, added, err := s.tenantStore(ctx, userID).AppendOutOfBankRows(candidates)
@@ -667,6 +673,8 @@ func (s *Server) handleOOBRowEvaluateForUser(ctx context.Context, userID int64, 
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 	status, notes := s.aiEngine.EvaluateOutOfBankReply(ctx, row, row.ActualReply)
 
 	updated, sum, err := s.tenantStore(ctx, userID).UpdateOutOfBankRow(no, model.OutOfBankPatch{
@@ -788,6 +796,8 @@ func (s *Server) handleStressGenerateForUser(ctx context.Context, userID int64, 
 	bankRows, _ := s.tenantStore(ctx, userID).Snapshot()
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 
 	candidates := s.aiEngine.GenerateStressProbes(ctx, bankRows, req)
 	rows, sum, added, err := s.tenantStore(ctx, userID).AppendStressTestRows(candidates)
@@ -878,6 +888,8 @@ func (s *Server) handleStressRowEvaluateForUser(ctx context.Context, userID int6
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 22*time.Second)
 	defer cancel()
+	st := s.userSettings(ctx, userID)
+	ctx = ai.ContextWithAIEngine(ctx, st.AIEngine)
 	status, notes, score, hal := s.aiEngine.EvaluateStressReply(ctx, row, row.ActualReply)
 
 	updated, sum, err := s.tenantStore(ctx, userID).UpdateStressTestRow(no, model.StressTestPatch{
