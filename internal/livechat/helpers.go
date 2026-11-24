@@ -38,15 +38,45 @@ const (
 	medanLngMax = 98.74
 )
 
+type CivicCase struct {
+	Title      string `json:"title"`
+	ReportText string `json:"reportText"`
+}
+
+var randomCases = []CivicCase{
+	{
+		Title:      "Lampu jalan mati",
+		ReportText: "Lampu penerangan jalan umum padam sejak 3 hari lalu sehingga jalan gelap gulita dan rawan kecelakaan di malam hari min.",
+	},
+	{
+		Title:      "Jalan berlubang dan aspal rusak",
+		ReportText: "Ada lubang jalan berukuran cukup besar dan dalam yang sangat membahayakan pengendara sepeda motor, mohon segera ditambal aspalnya.",
+	},
+	{
+		Title:      "Tumpukan sampah liar",
+		ReportText: "Sampah menumpuk di pinggir jalan dan menimbulkan bau busuk karena belum diangkut petugas selama beberapa hari.",
+	},
+	{
+		Title:      "Saluran parit tersumbat banjir",
+		ReportText: "Drainase parit tersumbat endapan lumpur dan sampah sehingga saat hujan lebat air meluap menggenangi jalan.",
+	},
+	{
+		Title:      "Pohon tumbang menghalangi jalan",
+		ReportText: "Ada dahan pohon besar patah menimpa kabel dan menghalangi sebagian badan jalan, tolong dibantu pemangkasan.",
+	},
+}
+
 // RandomSessionPreview holds every value shown in the form when it opens. The
 // caller lets the tester edit any field; the final map is persisted to the
 // session so the loop never re-rolls.
 type RandomSessionPreview struct {
-	NamaPengadu     string
-	TanggalKejadian string // YYYY-MM-DD
-	AlamatKejadian  string
-	TitikLokasi     string
-	TitikLokasiSrc  TitikLokasiSource
+	Title           string            `json:"title"`
+	ReportText      string            `json:"reportText"`
+	NamaPengadu     string            `json:"namaPengadu"`
+	TanggalKejadian string            `json:"tanggalKejadian"` // YYYY-MM-DD
+	AlamatKejadian  string            `json:"alamatKejadian"`
+	TitikLokasi     string            `json:"titikLokasi"`
+	TitikLokasiSrc  TitikLokasiSource `json:"titikLokasiSource"`
 }
 
 // GenerateRandomPreview uses the supplied rng so tests are deterministic; pass
@@ -55,7 +85,10 @@ func GenerateRandomPreview(rng *rand.Rand, now time.Time) RandomSessionPreview {
 	lat := medanLatMin + rng.Float64()*(medanLatMax-medanLatMin)
 	lng := medanLngMin + rng.Float64()*(medanLngMax-medanLngMin)
 	tanggal := now.AddDate(0, 0, -1-rng.Intn(14))
+	c := randomCases[rng.Intn(len(randomCases))]
 	return RandomSessionPreview{
+		Title:           c.Title,
+		ReportText:      c.ReportText,
 		NamaPengadu:     randomNama[rng.Intn(len(randomNama))],
 		TanggalKejadian: tanggal.Format("2006-01-02"),
 		AlamatKejadian:  randomAlamat[rng.Intn(len(randomAlamat))],

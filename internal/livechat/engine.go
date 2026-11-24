@@ -121,6 +121,9 @@ func (e *Engine) Run(parent context.Context) error {
 
 	human := newHumanizer(e.cfg.Settings)
 	if err := e.sendOpening(ctx, human); err != nil {
+		if errors.Is(err, context.Canceled) || ctx.Err() != nil {
+			return e.handleStop("dihentikan oleh pengguna")
+		}
 		_ = e.closeWith(StatusFailed, "gagal mengirim pesan pembuka: "+err.Error(), "")
 		return err
 	}
@@ -614,8 +617,9 @@ func (e *Engine) pickNextPrompt(bubbles []CollectedBubble) (string, QuestionKind
 // essential order; earlier ones were already answered by the bot's own flow.
 func (e *Engine) trimStale(current QuestionKind) {
 	order := map[QuestionKind]int{
-		KindIsiLaporan: 1, KindKonfirmasi: 2, KindNama: 3,
-		KindTanggal: 4, KindTitikLokasi: 5, KindAlamat: 6, KindBerkas: 7,
+		KindMenuAwal: 0, KindNama: 1, KindJudulLaporan: 2, KindTanggal: 3,
+		KindAlamat: 4, KindTitikLokasi: 5, KindIsiLaporan: 6, KindBerkas: 7,
+		KindKonfirmasi: 8, KindBatalKonfirmasi: 9,
 	}
 	cur, ok := order[current]
 	if !ok {

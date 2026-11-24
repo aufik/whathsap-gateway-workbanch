@@ -64,6 +64,7 @@
             <select id="selectAIEngine" class="ai-select-engine">
               <option value="local">Memuat status engine...</option>
             </select>
+            <span id="aiEngineBadge" style="display:none"></span>
             <button id="btnTestLLM" class="btn btn-outline btn-xs" type="button" title="Kirim prompt uji ke provider LLM">⚡ Tes Ping LLM</button>
             <button id="btnReloadEnv" class="btn btn-outline btn-xs" type="button" title="Baca ulang file .env tanpa restart server">🔄 Reload .env</button>
           </div>
@@ -1274,7 +1275,7 @@
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
-  <script type="module" src="app.js"></script>
-  <script type="module" src="livechat.js"></script>
+  <script type="module" src="app.js?v=2.2.1"></script>
+  <script type="module" src="livechat.js?v=2.2.1"></script>
 </body>
 </html>

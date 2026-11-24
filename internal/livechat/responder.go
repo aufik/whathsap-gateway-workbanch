@@ -99,19 +99,18 @@ func (r *Responder) ComposeForKind(ctx context.Context, kind QuestionKind, in An
 func (r *Responder) factualDraft(in AnswerInput, kind QuestionKind) (base string, media *Asset, loc *Location, note string, usedOutside bool) {
 	sess := in.Session
 	switch kind {
+	case KindMenuAwal:
+		base = "halo min, saya mau buat pengaduan baru"
 	case KindNama:
 		base = pickNama(sess.NamaPengadu, in.IsRepeat, in.Random)
+	case KindJudulLaporan:
+		base = pickJudul(sess.Title, in.IsRepeat, in.Random)
 	case KindTanggal:
 		base = pickTanggal(sess.TanggalKejadian, in.IsRepeat, in.Random)
 	case KindAlamat:
 		base = pickAlamat(sess.AlamatKejadian, in.IsRepeat, in.Random)
 	case KindIsiLaporan:
-		if strings.TrimSpace(sess.ReportText) != "" {
-			base = pickReport(sess.ReportText, in.IsRepeat, in.Random)
-		} else {
-			// Opsi A: tester mengosongkan laporan -> respons balik kontekstual pertanyaan bot
-			base = pickDynamicReport(in.BotContext, in.Random)
-		}
+		base = pickReportOrCoherent(sess.ReportText, sess.Title, in.IsRepeat, in.Random)
 	case KindTitikLokasi:
 		base, loc, note = r.locationAnswer(in)
 	case KindBerkas:
@@ -361,6 +360,50 @@ func pickReport(report string, isRepeat bool, rng *rand.Rand) string {
 	return opts[rng.Intn(len(opts))]
 }
 
+func pickJudul(title string, isRepeat bool, rng *rand.Rand) string {
+	clean := strings.TrimSpace(title)
+	if clean == "" || strings.HasPrefix(clean, "Live Chat ") || strings.HasPrefix(clean, "Sesi ") {
+		clean = "Lampu jalan mati"
+	}
+	if idx := strings.Index(clean, " ("); idx > 0 {
+		clean = strings.TrimSpace(clean[:idx])
+	}
+	if isRepeat {
+		return clean
+	}
+	vars := []string{
+		clean,
+		clean + " min",
+		"Mau lapor " + strings.ToLower(clean) + " min",
+		"Saya mau buat laporan " + strings.ToLower(clean),
+	}
+	if rng == nil {
+		return vars[0]
+	}
+	return vars[rng.Intn(len(vars))]
+}
+
+func pickReportOrCoherent(reportText, title string, isRepeat bool, rng *rand.Rand) string {
+	clean := strings.TrimSpace(reportText)
+	if clean != "" {
+		return pickReport(clean, isRepeat, rng)
+	}
+	cleanTitle := strings.ToLower(title)
+	for _, c := range randomCases {
+		if strings.Contains(cleanTitle, strings.ToLower(c.Title)) || strings.Contains(strings.ToLower(c.Title), cleanTitle) {
+			return pickReport(c.ReportText, isRepeat, rng)
+		}
+	}
+	if len(randomCases) > 0 {
+		idx := 0
+		if rng != nil {
+			idx = rng.Intn(len(randomCases))
+		}
+		return pickReport(randomCases[idx].ReportText, isRepeat, rng)
+	}
+	return "Ada kendala di lokasi tersebut min, tolong segera dibantu diperiksa."
+}
+
 func pickDynamicReport(botContext string, rng *rand.Rand) string {
 	opts := []string{
 		"Mengenai masalah tersebut tolong segera dibantu tindak lanjuti ya pak.",
@@ -426,15 +469,18 @@ var safeTypoPairs = [][2]string{
 }
 
 var ngasalByKind = map[QuestionKind][]string{
-	KindNama:        {"hmm siapa ya", "boleh tebak-tebakan aja pak"},
-	KindTanggal:     {"kayaknya minggu lalu deh", "lupa pastinya, campur aduk"},
-	KindAlamat:      {"deket pasar yang rame itu pak", "tempetnya agak masuk ke dalam"},
-	KindIsiLaporan:  {"ada yang bikin sebel aja pak", "pokoknya kurang enak dilihat"},
-	KindTitikLokasi: {"share lokasi gak bisa pak hehe", "lokasinya ada di hp aja"},
+	KindMenuAwal:        {"halo min, saya mau buat pengaduan baru"},
+	KindNama:            {"hmm siapa ya", "boleh tebak-tebakan aja pak"},
+	KindJudulLaporan:    {"masalahnya agak rumit min", "pokoknya ada yang rusak", "soal fasilitas umum ini min"},
+	KindTanggal:         {"kayaknya minggu lalu deh", "lupa pastinya, campur aduk"},
+	KindAlamat:          {"deket pasar yang rame itu pak", "tempetnya agak masuk ke dalam"},
+	KindIsiLaporan:      {"ada yang bikin sebel aja pak", "pokoknya kurang enak dilihat"},
+	KindTitikLokasi:     {"share lokasi gak bisa pak hehe", "lokasinya ada di hp aja"},
 	KindBerkas:          {"fotonya belum sempat diambil", "nanti aja ya pak"},
 	KindBatalKonfirmasi: {"jangan dibatalkan pak, lanjutin aja", "eh jangan batal dong min"},
 	KindKonfirmasi:      {"terserah pak", "boleh iya boleh enggak"},
-	KindLainnya:     {"iya pak", "begitulah pak"},
+	KindLainnya:         {"iya pak", "begitulah pak"},
+	KindUnknown:         {"mohon dibantu ya pak"},
 }
 
 func applyNgasal(kind QuestionKind, rng *rand.Rand) string {

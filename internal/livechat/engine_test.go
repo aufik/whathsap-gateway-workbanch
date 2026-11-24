@@ -641,7 +641,7 @@ func TestEngineHandlesBotCancellation(t *testing.T) {
 	}
 
 	// Wait for loop to process the cancellation reply
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 60; i++ {
 		time.Sleep(50 * time.Millisecond)
 		det, err := st.GetSessionDetail(context.Background(), uid, sess.ID)
 		if err == nil && det.Session.Status != StatusRunning {

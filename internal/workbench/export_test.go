@@ -231,15 +231,19 @@ func TestExportRealUserData(t *testing.T) {
 		}
 		return len(rows)
 	}
-	// 2 baris judul/header + 210 data.
-	if got := sheetRows(excel.SheetBank); got != 212 {
-		t.Fatalf("bank sheet rows: %d want 212", got)
+	bankRows, _ := store.Snapshot()
+	oobRows, _ := store.OutOfBankSnapshot()
+	stressRows, _ := store.StressTestSnapshot()
+
+	// 2 baris judul/header + data
+	if got := sheetRows(excel.SheetBank); got != len(bankRows)+2 {
+		t.Fatalf("bank sheet rows: %d want %d", got, len(bankRows)+2)
 	}
-	if got := sheetRows(excel.SheetOutOfBank); got != 54 {
-		t.Fatalf("oob sheet rows: %d want 54", got)
+	if got := sheetRows(excel.SheetOutOfBank); got != len(oobRows)+2 {
+		t.Fatalf("oob sheet rows: %d want %d", got, len(oobRows)+2)
 	}
-	if got := sheetRows(excel.SheetStress); got != 17 {
-		t.Fatalf("stress sheet rows: %d want 17", got)
+	if got := sheetRows(excel.SheetStress); got != len(stressRows)+2 {
+		t.Fatalf("stress sheet rows: %d want %d", got, len(stressRows)+2)
 	}
 	fmt.Printf("export user 2: bank=%d oob=%d stress=%d bytes=%d\n",
 		sheetRows(excel.SheetBank), sheetRows(excel.SheetOutOfBank),

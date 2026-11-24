@@ -234,6 +234,11 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		title = "Live Chat " + time.Now().Format("02 Jan 15:04")
 	}
 
+	reportText := strings.TrimSpace(req.ReportText)
+	if reportText == "" {
+		reportText = preview.ReportText
+	}
+
 	mode := livechat.CategoryMode(strings.TrimSpace(req.CategoryMode))
 	if mode == "" {
 		mode = livechat.ModeBenar
@@ -259,7 +264,7 @@ func (h *livechatHandlers) handleStartSession(w http.ResponseWriter, r *http.Req
 		WAPhone:         devicePhone(r.Context(), h.server, userID, req.DeviceUUID),
 		BotPhone:        botPhone,
 		Title:           title,
-		ReportText:      strings.TrimSpace(req.ReportText),
+		ReportText:      reportText,
 		NamaPengadu:     nama,
 		TanggalKejadian: tgl,
 		AlamatKejadian:  alamat,

@@ -37,8 +37,8 @@ func seededRand(seed int64) *rand.Rand { return rand.New(rand.NewSource(seed)) }
 // surface (typo/ngasal/celah probe).
 func TestAnswerMatrix(t *testing.T) {
 	kinds := []QuestionKind{
-		KindNama, KindIsiLaporan, KindTanggal, KindAlamat,
-		KindTitikLokasi, KindBerkas, KindKonfirmasi, KindLainnya,
+		KindNama, KindJudulLaporan, KindIsiLaporan, KindTanggal, KindAlamat,
+		KindTitikLokasi, KindBerkas, KindKonfirmasi, KindMenuAwal, KindLainnya,
 	}
 	modes := []CategoryMode{ModeBenar, ModeTypo, ModeNgasal, ModeCelah}
 
@@ -308,7 +308,8 @@ func TestDynamicReportWhenEmpty(t *testing.T) {
 	if strings.TrimSpace(res.Text) == "" {
 		t.Fatalf("expected dynamic response when report text is empty, got empty")
 	}
-	if !strings.Contains(res.Text, "masalah") && !strings.Contains(res.Text, "lapor") && !strings.Contains(res.Text, "kendala") {
+	lower := strings.ToLower(res.Text)
+	if !strings.Contains(lower, "masalah") && !strings.Contains(lower, "lapor") && !strings.Contains(lower, "kendala") {
 		t.Fatalf("expected context-relevant dynamic text, got %q", res.Text)
 	}
 }

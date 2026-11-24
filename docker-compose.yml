@@ -16,7 +16,7 @@ services:
       - ./Uji-Bank-Pertanyaan-Programmer-4.xlsx:/app/Uji-Bank-Pertanyaan-Programmer-4.xlsx:ro
     environment:
       - TZ=Asia/Jakarta
-      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@host.docker.internal:5432/whathsap-gateway-workbench?sslmode=disable}
+      - DATABASE_URL=postgres://postgres:postgres@host.docker.internal:5432/whathsap-gateway-workbench?sslmode=disable
     networks:
       - app-network
     healthcheck:

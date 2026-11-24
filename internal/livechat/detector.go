@@ -12,6 +12,7 @@ type QuestionKind string
 const (
 	KindUnknown         QuestionKind = ""
 	KindNama            QuestionKind = "nama"
+	KindJudulLaporan    QuestionKind = "judul_laporan"
 	KindIsiLaporan      QuestionKind = "isi_laporan"
 	KindTanggal         QuestionKind = "tanggal"
 	KindAlamat          QuestionKind = "alamat"
@@ -19,6 +20,7 @@ const (
 	KindBerkas          QuestionKind = "berkas"
 	KindBatalKonfirmasi QuestionKind = "batal_konfirmasi"
 	KindKonfirmasi      QuestionKind = "konfirmasi"
+	KindMenuAwal        QuestionKind = "menu_awal"
 	KindLainnya         QuestionKind = "lainnya"
 )
 
@@ -29,55 +31,79 @@ var kindRules = []struct {
 	kind     QuestionKind
 	patterns []string
 }{
-	// Anti-cancellation prompt must win before general confirmation
+	// 1. Menu Awal / Sesi Selesai / Reset menu bot (harus dipotong dengan minta pengaduan baru)
+	{KindMenuAwal, []string{
+		"sesi layanan anda sebelumnya sudah berakhir",
+		"sesi layanan anda telah berakhir",
+		"sesi layanan berakhir",
+		"chat nomor resmi pemko medan",
+		"aduan yang tercatat pada nomor ini",
+		"sebutkan nomor aduannya",
+		"nomor aduan:",
+		"selamat siang. saya wa ai pemko medan",
+		"selamat pagi. saya wa ai pemko medan",
+		"selamat malam. saya wa ai pemko medan",
+		"saya wa ai pemko medan",
+		"siap membantu anda",
+	}},
+	// 2. Anti-cancellation prompt must win before general confirmation
 	{KindBatalKonfirmasi, []string{
 		"apakah anda ingin membatalkan", "ingin membatalkan", "batalkan pengaduan",
 		"membatalkan pengaduan", "batal pengaduan",
 	}},
-	// Konfirmasi first: the bot's summary confirmation mentions "lampiran",
-	// "alamat", and "tanggal" inside the recap, so it must win over the
-	// per-field matchers when the question is "...ringkasan aduan di atas
-	// sudah sesuai untuk dikirim?".
+	// 3. Konfirmasi (ringkasan aduan)
 	{KindKonfirmasi, []string{
-		"apakah anda ingin", "apakah sudah benar", "ya/tidak", "konfirmasi",
-		"benar? (ya/tidak)", "ringkasan aduan", "sudah sesuai untuk dikirim",
-		"ketik batal", "ingin dikirim",
-		"pengaduan mengenai hal", "aduan mengenai hal",
+		"ringkasan aduan", "sudah sesuai untuk dikirim", "apakah anda ingin",
+		"apakah sudah benar", "ya/tidak", "benar? (ya/tidak)", "ketik batal",
+		"ingin dikirim", "pengaduan mengenai hal", "aduan mengenai hal", "konfirmasi",
 	}},
+	// 4. Titik Lokasi
 	{KindTitikLokasi, []string{
 		"titik lokasi", "koordinat", "tautan peta", "link maps",
 		"lokasi kejadian", "share lokasi", "tautan google", "google maps",
 		"titik koordinat",
 	}},
+	// 5. Tanggal Kejadian
 	{KindTanggal, []string{
 		"tanggal kejadian", "format: yyyy-mm-dd", "format yyyy-mm-dd",
 		"kapan kejadian", "tanggal peristiwa", "kapan kejadiannya",
 		"kapan kejadiannya terjadi", "kapan terjadinya",
 	}},
+	// 6. Nama Pelapor
 	{KindNama, []string{
 		"isi nama", "nama lengkap", "nama pengadu", "siapa nama", "nama pelapor",
 		"boleh diinfokan nama", "diinfokan nama", "nama anda",
 	}},
+	// 7. Alamat Kejadian
 	{KindAlamat, []string{
 		"alamat kejadian", "alamat lengkap", "isi alamat", "dimana alamat",
 		"di mana alamat", "alamatnya",
 	}},
+	// 8. Berkas Lampiran
 	{KindBerkas, []string{
 		"unggah", "upload", "lampirkan", "kirim foto", "kirimkan foto",
 		"kirim dokumen", "bukti foto", "bukti",
 		"kirim lampiran", "lampiran terkait", "foto atau dokumen",
 		"lampiran berkas", "kirim berkas",
 	}},
+	// 9. Judul Laporan (topik singkat masalah layanan publik)
+	{KindJudulLaporan, []string{
+		"judul laporan", "judul aduan", "ingin mengadukan tentang apa",
+		"sebutkan secara singkat masalah", "masalah layanan publik yang ingin anda adukan",
+		"ingin anda adukan", "hal yang ingin diadukan", "hal yang ingin dilaporkan",
+		"tentang apa yang ingin diadukan", "aduan tentang apa", "ingin melaporkan apa",
+		"apa yang ingin diadukan", "apa yang ingin dilaporkan",
+	}},
+	// 10. Isi Laporan / Kejadian (deskripsi kronologi kejadian detail)
 	{KindIsiLaporan, []string{
-		"isi laporan", "tuliskan aduan", "isi pengaduan", "tulis pengaduan",
-		"ceritakan pengaduan", "laporan pengaduan",
-		"dijelaskan lebih dulu kejadian", "kejadian atau masalah",
+		"apa isi kejadiannya", "isi kejadiannya", "isi kejadian", "apa kejadiannya",
+		"isi laporan", "isi pengaduan", "tuliskan aduan", "tulis pengaduan",
+		"ceritakan pengaduan", "ceritakan kejadiannya", "ceritakan kejadian",
+		"kronologi kejadian", "kronologi", "uraian kejadian", "uraian masalah",
+		"detail kejadian", "detail masalah", "rincian kejadian", "deskripsi kejadian",
+		"laporan pengaduan", "dijelaskan lebih dulu kejadian", "kejadian atau masalah",
 		"masalah yang ingin disampaikan", "kejadian yang ingin disampaikan",
 		"jelaskan kejadian", "jelaskan masalah",
-		"masalah layanan publik", "sebutkan secara singkat masalah",
-		"ingin mengadukan tentang apa", "judul laporan", "judul aduan",
-		"ingin anda adukan", "hal yang ingin diadukan", "hal yang ingin dilaporkan",
-		"aduan tentang apa", "tentang apa yang ingin diadukan", "ingin melaporkan apa",
 	}},
 }
 

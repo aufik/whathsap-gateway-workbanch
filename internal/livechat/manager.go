@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -252,6 +253,12 @@ func (m *Manager) StartBatch(ctx context.Context, userID int64, in SessionInput,
 			nextIn := in
 			nextIn.RNGSeed = nextSeed
 			nextIn.Title = fmt.Sprintf("%s (%d/%d)", baseTitle, iter, repeatCount)
+			if in.Title == "" || in.Title == sess.Title || strings.HasPrefix(in.Title, "Live Chat ") {
+				nextIn.Title = fmt.Sprintf("%s (%d/%d)", preview.Title, iter, repeatCount)
+			}
+			if in.ReportText == "" || in.ReportText == sess.ReportText {
+				nextIn.ReportText = preview.ReportText
+			}
 			// Only randomize fields that were empty in original input template
 			if in.NamaPengadu == "" || in.NamaPengadu == sess.NamaPengadu {
 				nextIn.NamaPengadu = preview.NamaPengadu

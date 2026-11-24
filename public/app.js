@@ -227,16 +227,19 @@ function applyFullSnapshot(snap) {
 
   state.channelTelemetry = snap.channelTelemetry || {};
 
-  populateSettingsUI();
-  populateFilterDropdowns();
-  renderAIStatus();
-  renderWAStatus();
-  renderRunnerStatus();
-  renderTelemetry();
-  renderSummaryAndOPD();
-  renderTable();
-  renderOutOfBankSection();
-  renderStressSection();
+  const safeCall = (fn, name) => {
+    try { fn(); } catch (e) { console.warn(`Render error in ${name}:`, e); }
+  };
+  safeCall(populateSettingsUI, "populateSettingsUI");
+  safeCall(populateFilterDropdowns, "populateFilterDropdowns");
+  safeCall(renderAIStatus, "renderAIStatus");
+  safeCall(renderWAStatus, "renderWAStatus");
+  safeCall(renderRunnerStatus, "renderRunnerStatus");
+  safeCall(renderTelemetry, "renderTelemetry");
+  safeCall(renderSummaryAndOPD, "renderSummaryAndOPD");
+  safeCall(renderTable, "renderTable");
+  safeCall(renderOutOfBankSection, "renderOutOfBankSection");
+  safeCall(renderStressSection, "renderStressSection");
 }
 
 function connectSSE() {
@@ -428,28 +431,40 @@ function populateSettingsUI() {
 function renderAIStatus() {
   const ai = state.ai;
   const sel = el("selectAIEngine");
+  const badge = el("aiEngineBadge");
   const testBtn = el("btnTestLLM");
-  if (!sel) return;
 
   const currentVal = (state.settings && state.settings.aiEngine) || (ai && ai.enabled ? "llm" : "local");
 
-  if (ai && ai.enabled) {
-    sel.disabled = false;
-    sel.innerHTML = `
-      <option value="llm">⚡ LLM Online (${escapeHTML(ai.model)})</option>
-      <option value="local">🏠 Smart Local Engine (Offline / Heuristik)</option>
-    `;
-    sel.value = currentVal === "local" ? "local" : "llm";
-    sel.title = `Provider: ${ai.provider} • Model: ${ai.model}`;
-    if (testBtn) testBtn.disabled = false;
-  } else {
-    sel.disabled = true;
-    sel.innerHTML = `
-      <option value="local">Smart Local Engine (100% Gratis / Offline)</option>
-    `;
-    sel.value = "local";
-    sel.title = "LLM belum diatur di .env (berjalan lokal di Go)";
-    if (testBtn) testBtn.disabled = true;
+  if (sel) {
+    if (ai && ai.enabled) {
+      sel.disabled = false;
+      sel.innerHTML = `
+        <option value="llm">⚡ LLM Online (${escapeHTML(ai.model)})</option>
+        <option value="local">🏠 Smart Local Engine (Offline / Heuristik)</option>
+      `;
+      sel.value = currentVal === "local" ? "local" : "llm";
+      sel.title = `Provider: ${ai.provider} • Model: ${ai.model}`;
+      if (testBtn) testBtn.disabled = false;
+    } else {
+      sel.disabled = true;
+      sel.innerHTML = `
+        <option value="local">Smart Local Engine (100% Gratis / Offline)</option>
+      `;
+      sel.value = "local";
+      sel.title = "LLM belum diatur di .env (berjalan lokal di Go)";
+      if (testBtn) testBtn.disabled = true;
+    }
+  }
+
+  if (badge) {
+    if (ai && ai.enabled) {
+      badge.textContent = `LLM Aktif: ${ai.model}`;
+      badge.title = ai.provider;
+    } else {
+      badge.textContent = "Smart Local Engine (100% Gratis / Offline)";
+      badge.title = "Berjalan lokal di Go tanpa biaya API eksternal";
+    }
   }
 }
 
