@@ -50,13 +50,18 @@ function toastLC(msg, isError) {
   wrap.appendChild(item);
   setTimeout(() => item.remove(), 5000);
 }
+const BASE_PATH_LC = window.location.pathname.replace(/\/(?:index\.html)?$/, "").replace(/\/$/, "");
+
 async function apiLC(path, options = {}) {
   const opts = { ...options, headers: { ...(options.headers || {}) } };
   if (opts.body && !(opts.body instanceof FormData) && typeof opts.body === "object") {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
   }
-  const res = await fetch(path, opts);
+  const fullPath = (BASE_PATH_LC && path.startsWith("/") && !path.startsWith(BASE_PATH_LC + "/"))
+    ? (BASE_PATH_LC + path)
+    : path;
+  const res = await fetch(fullPath, opts);
   const text = await res.text();
   let data = null;
   if (text) {
@@ -230,10 +235,10 @@ function renderShell() {
           <thead>
             <tr>
               <th>No</th><th>Tanggal</th><th>Judul</th><th>Mode</th>
-              <th>Giliran</th><th>Status</th><th>Tiket</th>
+              <th>Giliran</th><th>Status</th><th>Keterangan</th><th>Tiket</th><th>Aksi</th>
             </tr>
           </thead>
-          <tbody id="lcHistoryBody"><tr><td colspan="7" class="muted">Memuat...</td></tr></tbody>
+          <tbody id="lcHistoryBody"><tr><td colspan="9" class="muted">Memuat...</td></tr></tbody>
         </table>
       </div>
 
@@ -373,7 +378,7 @@ function renderAssetList() {
     .map((a) => {
       const sel = LC.selectedAssetIds.has(a.id) ? " selected" : "";
       const preview = a.kind === "image"
-        ? `<img class="lc-asset-preview" src="/api/livechat/assets/${a.id}/preview" alt="" loading="lazy" />`
+        ? `<img class="lc-asset-preview" src="${BASE_PATH_LC || ''}/api/livechat/assets/${a.id}/preview" alt="" loading="lazy" />`
         : `<span class="lc-asset-preview" style="display:flex;align-items:center;justify-content:center;font-size:9px;background:#fee2e2;color:#b91c1c;font-weight:700">DOC</span>`;
       return `<span class="lc-asset-chip${sel}" data-asset-id="${a.id}">
         ${preview}
@@ -459,13 +464,35 @@ function buildTypingIndicator() {
   return h(`<div class="lc-typing" aria-label="Bot sedang mengetik"><span></span><span></span><span></span></div>`);
 }
 
+function formatKeterangan(s) {
+  if (s.keterangan && s.keterangan.trim()) {
+    return escapeText(s.keterangan.trim());
+  }
+  if (s.status === "finished") {
+    return s.ticketNo ? `Diterima (#${escapeText(s.ticketNo)})` : "Diterima";
+  }
+  if (s.status === "failed") {
+    return "Gagal: " + escapeText(s.endReason || "error");
+  }
+  if (s.status === "timeout") {
+    return "Timeout: " + escapeText(s.endReason || "batas waktu");
+  }
+  if (s.status === "stopped") {
+    return "Dihentikan: " + escapeText(s.endReason || "manual");
+  }
+  if (s.status === "running") {
+    return "Sesi aktif";
+  }
+  return escapeText(s.endReason || "-");
+}
+
 function renderHistory() {
   const body = document.getElementById("lcHistoryBody");
   if (!body) return;
   const countEl = document.getElementById("lcHistoryTotalCount");
   if (countEl) countEl.textContent = String(LC.pagination.total);
   if (LC.sessions.length === 0) {
-    body.innerHTML = `<tr><td colspan="7" class="muted" style="text-align:center;padding:18px;">Tidak ada sesi yang cocok dengan filter.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="muted" style="text-align:center;padding:18px;">Tidak ada sesi yang cocok dengan filter.</td></tr>`;
     return;
   }
   const startNo = (LC.pagination.page - 1) * LC.pagination.pageSize;
@@ -478,7 +505,11 @@ function renderHistory() {
         <td><span class="muted">${escapeText(s.categoryMode || "")}</span></td>
         <td>${s.totalTurns || 0}</td>
         <td><span class="lc-chat-badge ${escapeText(s.status || "")}">${escapeText(s.status || "")}</span></td>
+        <td class="lc-col-keterangan" title="${escapeText(s.keterangan || s.endReason || "")}">${formatKeterangan(s)}</td>
         <td>${escapeText(s.ticketNo || "-")}</td>
+        <td style="white-space:nowrap">
+          <button type="button" class="lc-btn-delete-row lc-mini-btn" data-del-id="${s.id}" title="Hapus sesi (soft delete)">🗑 Hapus</button>
+        </td>
       </tr>
     `)
     .join("");
@@ -536,7 +567,10 @@ function renderDetailPanel(detail) {
   panel.innerHTML = `
     <div class="lc-detail-header-row">
       <h3>Detail Sesi #${s.id} &mdash; ${escapeText(s.title || "Pengaduan")}</h3>
-      <button id="lcBtnCloseDetail" type="button" class="lc-mini-btn" style="color:var(--danger);font-weight:600;">✕ Tutup Detail</button>
+      <div style="display:flex;gap:8px;">
+        <button id="lcBtnDeleteDetail" type="button" class="lc-mini-btn lc-btn-delete-row" data-del-id="${s.id}" title="Hapus sesi (soft delete)">🗑 Hapus Sesi</button>
+        <button id="lcBtnCloseDetail" type="button" class="lc-mini-btn" style="color:var(--danger);font-weight:600;">✕ Tutup Detail</button>
+      </div>
     </div>
     <div class="lc-detail-meta">
       <div>Status: <strong><span class="lc-chat-badge ${escapeText(s.status || "")}">${escapeText(s.status || "")}</span></strong></div>
@@ -547,6 +581,13 @@ function renderDetailPanel(detail) {
       <div>Nomor Tiket: <strong>${escapeText(s.ticketNo || "-")}</strong></div>
       <div style="grid-column: span 3">Alasan Selesai: <strong>${escapeText(s.endReason || "-")}</strong></div>
       <div style="grid-column: span 3">Cuplikan Akhir: <em>${escapeText(s.lastChatExcerpt || "-")}</em></div>
+      <div style="grid-column: span 3; display:flex; flex-direction:column; gap:4px; margin-top:6px; padding-top:6px; border-top:1px dashed var(--border);">
+        <label style="font-size:12px; font-weight:600; color:var(--text);">Keterangan / Catatan Evaluasi Sesi:</label>
+        <div style="display:flex; gap:8px;">
+          <input id="lcInputDetailKeterangan" type="text" class="lc-search-input" style="flex:1" placeholder="Tuliskan catatan/keterangan evaluasi untuk sesi ini..." value="${escapeText(s.keterangan || "")}" />
+          <button id="lcBtnSaveKeterangan" type="button" class="btn btn-secondary btn-sm" data-session-id="${s.id}">Simpan Keterangan</button>
+        </div>
+      </div>
     </div>
 
     <div class="lc-detail-tabs">
@@ -626,6 +667,41 @@ async function stopSession(id) {
   }
 }
 
+async function deleteSession(id) {
+  if (!confirm(`Hapus sesi #${id} dari riwayat? (Soft delete: pesan & audit tetap aman tersimpan di database)`)) return;
+  try {
+    await apiLC(`/api/livechat/sessions/${id}`, { method: "DELETE" });
+    toastLC(`Sesi #${id} berhasil dihapus.`);
+    if (LC.activeDetailId === id) {
+      LC.activeDetailId = 0;
+      LC.activeDetailData = null;
+      const p = document.getElementById("lcDetailPanel");
+      if (p) { p.hidden = true; p.innerHTML = ""; }
+    }
+    LC.liveSessions.delete(id);
+    renderEmulatorGrid();
+    await loadSessions();
+  } catch (err) {
+    toastLC("Gagal menghapus sesi: " + err.message, true);
+  }
+}
+
+async function saveSessionKeterangan(id, keterangan) {
+  try {
+    await apiLC(`/api/livechat/sessions/${id}/keterangan`, {
+      method: "PATCH",
+      body: { keterangan: keterangan.trim() },
+    });
+    toastLC("Keterangan sesi berhasil disimpan.");
+    if (LC.activeDetailData && LC.activeDetailData.session && LC.activeDetailData.session.id === id) {
+      LC.activeDetailData.session.keterangan = keterangan.trim();
+    }
+    await loadSessions();
+  } catch (err) {
+    toastLC("Gagal menyimpan keterangan: " + err.message, true);
+  }
+}
+
 async function uploadAsset() {
   const input = document.getElementById("lcAssetFile");
   const label = document.getElementById("lcAssetLabel").value.trim();
@@ -672,7 +748,8 @@ function connectEvents() {
   LC.eventsAbort = ctrl;
   (async () => {
     try {
-      const res = await fetch("/api/livechat/events", { credentials: "same-origin", signal: ctrl.signal });
+      const sseUrl = (BASE_PATH_LC && !"/api/livechat/events".startsWith(BASE_PATH_LC)) ? (BASE_PATH_LC + "/api/livechat/events") : "/api/livechat/events";
+      const res = await fetch(sseUrl, { credentials: "same-origin", signal: ctrl.signal });
       if (!res.ok || !res.body) throw new Error("stream " + res.status);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -796,7 +873,8 @@ function bindEvents() {
   document.getElementById("lcBtnStart").addEventListener("click", startSession);
   document.getElementById("lcBtnDownloadExcel").addEventListener("click", async () => {
     try {
-      const res = await fetch("/api/livechat/excel/download", { credentials: "same-origin" });
+      const dlUrl = (BASE_PATH_LC && !"/api/livechat/excel/download".startsWith(BASE_PATH_LC)) ? (BASE_PATH_LC + "/api/livechat/excel/download") : "/api/livechat/excel/download";
+      const res = await fetch(dlUrl, { credentials: "same-origin" });
       if (!res.ok) {
         const text = await res.text();
         let msg = `HTTP ${res.status}`;
@@ -873,8 +951,15 @@ function bindEvents() {
     if (log) openDetail(parseInt(log.dataset.logId, 10));
   });
 
-  // History table row click.
+  // History table row click or delete click.
   document.getElementById("lcHistoryBody").addEventListener("click", (e) => {
+    const delBtn = e.target.closest(".lc-btn-delete-row");
+    if (delBtn) {
+      e.stopPropagation();
+      const id = parseInt(delBtn.dataset.delId, 10);
+      if (id) deleteSession(id);
+      return;
+    }
     const tr = e.target.closest("tr[data-detail-id]");
     if (!tr) return;
     openDetail(parseInt(tr.dataset.detailId, 10));
@@ -933,12 +1018,26 @@ function bindEvents() {
     }
   });
 
-  // Detail panel tabs & close button
+  // Detail panel tabs, delete button, save keterangan & close button
   document.getElementById("lcDetailPanel").addEventListener("click", (e) => {
     const tabBtn = e.target.closest("[data-detail-tab]");
     if (tabBtn) {
       LC.detailViewTab = tabBtn.dataset.detailTab;
       renderDetailPanel(LC.activeDetailData);
+      return;
+    }
+    const delBtn = e.target.closest("#lcBtnDeleteDetail");
+    if (delBtn) {
+      const id = parseInt(delBtn.dataset.delId, 10);
+      if (id) deleteSession(id);
+      return;
+    }
+    const saveKetBtn = e.target.closest("#lcBtnSaveKeterangan");
+    if (saveKetBtn) {
+      const id = parseInt(saveKetBtn.dataset.sessionId, 10);
+      const input = document.getElementById("lcInputDetailKeterangan");
+      const val = input ? input.value : "";
+      if (id) saveSessionKeterangan(id, val);
       return;
     }
     const closeBtn = e.target.closest("#lcBtnCloseDetail");

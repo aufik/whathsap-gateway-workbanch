@@ -1879,6 +1879,25 @@ textarea:focus {
 .lc-history-table tbody tr:hover {
   background: #f8fafc;
 }
+.lc-col-keterangan {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.lc-btn-delete-row {
+  color: var(--danger, #ef4444);
+  border-color: rgba(239, 68, 68, 0.35);
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.lc-btn-delete-row:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--danger, #ef4444);
+  color: var(--danger, #ef4444);
+}
 
 .lc-detail-panel {
   margin-top: 10px;

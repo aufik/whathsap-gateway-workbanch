@@ -200,9 +200,12 @@ func (e *Exporter) nextRow(f *excelize.File, sheet string) int {
 	return len(rows) + 1
 }
 
-// excelKeterangan fills the "Keterangan" column for non-finished statuses so a
-// reader can tell why the session ended (plan §9).
+// excelKeterangan fills the "Keterangan" column using user custom remarks if set,
+// or non-finished status descriptions so a reader can tell why the session ended (plan §9).
 func excelKeterangan(s Session) string {
+	if strings.TrimSpace(s.Keterangan) != "" {
+		return strings.TrimSpace(s.Keterangan)
+	}
 	switch s.Status {
 	case StatusFinished:
 		return ""

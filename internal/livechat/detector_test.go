@@ -19,6 +19,10 @@ func TestDetectQuestionKindTable(t *testing.T) {
 		{"Bisa share lokasi kejadian?", KindTitikLokasi},
 		{"Mohon unggah bukti foto lokasi.", KindBerkas},
 		{"Silakan lampirkan dokumen pendukung.", KindBerkas},
+		{"Apakah Anda ingin membatalkan pengaduan saat ini?", KindBatalKonfirmasi},
+		{"Jika ingin mendapatkan info, apakah ingin membatalkan pengaduan?", KindBatalKonfirmasi},
+		{"*Mohon* sebutkan secara singkat masalah layanan publik yang ingin Anda adukan, misalnya *Lampu jalan mati* atau *Jalan berlubang* *.*", KindIsiLaporan},
+		{"*Maaf*, *Judul Laporan* wajib diisi dan belum bisa dilewati. Anda ingin mengadukan tentang apa? *.*", KindIsiLaporan},
 		{"Apakah Anda ingin mengirim pengaduan sekarang? ya/tidak", KindKonfirmasi},
 		{"Konfirmasi data sudah benar?", KindKonfirmasi},
 		{"Halo kak, ada yang bisa dibantu?", KindLainnya},
@@ -62,6 +66,15 @@ func TestIsDoneSignals(t *testing.T) {
 		if gotDone && reason == "" {
 			t.Fatalf("IsDone(%q) returned true with empty reason", text)
 		}
+	}
+
+	// Guard against bot cancellation message containing "diterima"
+	cancelMsg := "*Baik*, pengaduan sudah kami batalkan ya *.* Pengaduan diterima dan diverifikasi."
+	if done, _ := IsDone(cancelMsg); done {
+		t.Fatalf("IsDone must be false when cancellation is signaled, got true")
+	}
+	if cancelled, _ := IsCancelled(cancelMsg); !cancelled {
+		t.Fatalf("IsCancelled must be true for cancelled message")
 	}
 }
 

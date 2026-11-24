@@ -16,21 +16,46 @@ type aiHookAdapter struct {
 	engine *ai.Engine
 }
 
-func (a *aiHookAdapter) ComposeAnswer(ctx context.Context, kind livechat.QuestionKind, draft, botQuestion string) (string, error) {
+func (a *aiHookAdapter) ComposeAnswer(ctx context.Context, mode livechat.CategoryMode, kind livechat.QuestionKind, draft, botQuestion string) (string, error) {
 	if a.engine == nil || !a.engine.IsLLMEnabled() {
 		return "", nil
 	}
-	sys := "Kamu adalah warga Kota Medan yang sedang membalas chat WhatsApp ke Customer Service / Bot Pemko Medan. " +
-		"Tugasmu: balas pertanyaan bot dengan kalimat santai, sopan, wajar khas gaya chat WA warga Medan (boleh singkatan umum seperti yg, dmn, pak, min). " +
-		"Jawab singkat (1 kalimat pendek, maksimal 15 kata). " +
-		"WAJIB JAGA FAKTA berikut tanpa mengubah angka, nama, tanggal, atau alamat: " + draft + ". " +
-		"Balas HANYA kalimat chat-nya saja tanpa tanda kutip dan tanpa penjelasan."
-	usr := fmt.Sprintf("Pertanyaan Bot: %s\nFakta Jawaban: %s", botQuestion, draft)
+	sys := buildLiveChatSystemPrompt(mode)
+	usr := fmt.Sprintf("Mode: %s\nJenis Data: %s\nPertanyaan/Pesan Bot: %s\nFakta Acuan: %s\n\nBalas chat WhatsApp:",
+		mode, kind, botQuestion, draft)
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	temp := 0.3
+	switch mode {
+	case livechat.ModeTypo:
+		temp = 0.5
+	case livechat.ModeNgasal:
+		temp = 0.7
+	case livechat.ModeCelah:
+		temp = 0.5
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 
-	return a.engine.ChatReply(timeoutCtx, sys, usr, 0.4)
+	return a.engine.ChatReply(timeoutCtx, sys, usr, temp)
+}
+
+func buildLiveChatSystemPrompt(mode livechat.CategoryMode) string {
+	base := "Kamu adalah warga Kota Medan yang sedang membalas chat WhatsApp ke Bot Layanan Pengaduan Pemko Medan.\n" +
+		"Tugasmu: Balas pertanyaan bot dalam 1 kalimat chat WhatsApp pendek (maksimal 15-20 kata), santai, khas warga Medan, langsung teks chat tanpa tanda kutip dan tanpa penjelasan.\n" +
+		"ATURAN WAJIB:\n" +
+		"1. Jika bot bertanya apakah pengaduan ingin dibatalkan (misalnya 'apakah Anda ingin membatalkan pengaduan saat ini?'), kamu TIDAK INGIN BATAL! Wajib tolak pembatalan dan minta dilanjutkan (misal: 'tidak min, jangan dibatalkan, lanjutkan laporan saya').\n"
+
+	switch mode {
+	case livechat.ModeTypo:
+		return base + "2. Mode TYPO: Jawab hal yang ditanyakan bot secara tepat sesuai fakta acuan, namun sisipkan gaya chat WA terburu-buru dengan singkatan wajar (contoh: yg, dmn, bgt, tlg, mhon, jln, ga/nggak, sy) dan sedikit typo huruf keyboard alami tanpa merusak nama, angka, atau makna laporan."
+	case livechat.ModeNgasal:
+		return base + "2. Mode NGASAL: Balas dengan nada warga yang agak bingung, salah paham konteks pertanyaan bot, atau memberikan respon yang melenceng namun tetap dalam situasi pengaduan (contoh jika ditanya nama: 'nama ktp apa nama panggilan pak?', jika ditanya tanggal: 'kemarin pas hujan lebat itu min')."
+	case livechat.ModeCelah:
+		return base + "2. Mode CELAH: Balas dengan jawaban yang menantang validasi input bot (misalnya jawaban sangat pendek '-', 'lewat dulu pak', atau format ambigu)."
+	default: // livechat.ModeBenar
+		return base + "2. Mode BENAR: Jawab secara sopan, wajar, dan presisi sesuai fakta acuan yang diberikan. Jaga fakta (nama, tanggal, alamat, atau inti masalah) tanpa mengubahnya."
+	}
 }
 
 // BuildLiveChat bootstraps the module for main.go. It returns nil, nil when the

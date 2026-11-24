@@ -326,6 +326,35 @@ func (h *livechatHandlers) handleDeleteSession(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
 
+// PATCH /api/livechat/sessions/{id}/keterangan
+func (h *livechatHandlers) handleUpdateSessionKeterangan(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.requireUser(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, errors.New("id sesi tidak valid"))
+		return
+	}
+	var body struct {
+		Keterangan string `json:"keterangan"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := h.store.UpdateSessionKeterangan(r.Context(), userID, id, body.Keterangan); err != nil {
+		if errors.Is(err, livechat.ErrNotFound) {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessionId": id, "keterangan": body.Keterangan})
+}
+
 // GET /api/livechat/assets
 func (h *livechatHandlers) handleListAssets(w http.ResponseWriter, r *http.Request) {
 	userID, ok := h.requireUser(w, r)

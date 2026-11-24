@@ -608,3 +608,52 @@ func TestManagerStopBatch(t *testing.T) {
 		t.Fatalf("session 1 should be stopped, got %s", list[0].Status)
 	}
 }
+
+// TestEngineHandlesBotCancellation verifies that when a bot cancels a session,
+// it is marked as failed/cancelled rather than finished with "diterima".
+func TestEngineHandlesBotCancellation(t *testing.T) {
+	st, _, uid := engineTestDeps(t)
+	fake := newFakeWA()
+	fake.collector.replies = []string{
+		"*Baik*, pengaduan sudah kami batalkan ya *.* Pengaduan diterima dan diverifikasi.",
+	}
+
+	mgr, err := NewManager(ManagerOptions{
+		Store:     st,
+		Assets:    NewAssetService(st, t.TempDir()),
+		Responder: &Responder{},
+		WA:        fakeResolver{wa: fake},
+		Settings: func(context.Context, int64) (model.HumanSettings, bool) {
+			return fastSettings(), true
+		},
+		MediaRoot: func(int64) string { return t.TempDir() },
+		AssetRoot: func(int64) string { return t.TempDir() },
+		Emitter:   NopEmitter{},
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	in := sampleInput()
+	sess, err := mgr.StartSession(context.Background(), uid, in)
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+
+	// Wait for loop to process the cancellation reply
+	for i := 0; i < 20; i++ {
+		time.Sleep(50 * time.Millisecond)
+		det, err := st.GetSessionDetail(context.Background(), uid, sess.ID)
+		if err == nil && det.Session.Status != StatusRunning {
+			sess = det.Session
+			break
+		}
+	}
+
+	if sess.Status == StatusFinished {
+		t.Fatalf("cancelled session must NOT be finished, got status=%s endReason=%s", sess.Status, sess.EndReason)
+	}
+	if !strings.Contains(sess.EndReason, "dibatalkan") {
+		t.Fatalf("expected endReason to mention dibatalkan, got %q", sess.EndReason)
+	}
+}

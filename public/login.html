@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Login — WA Bot QA Workbench</title>
-  <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/auth.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="auth.css" />
 </head>
 <body class="auth-body">
   <main class="auth-shell">
@@ -36,6 +36,7 @@
   </main>
 
   <script>
+    const basePath = window.location.pathname.replace(/\/(?:login\.html)?$/, "").replace(/\/$/, "");
     const form = document.getElementById("loginForm");
     const errBox = document.getElementById("loginError");
     const btn = document.getElementById("loginBtn");
@@ -46,7 +47,8 @@
       btn.disabled = true;
       btn.textContent = "Memproses...";
       try {
-        const res = await fetch("/api/auth/login", {
+        const loginUrl = (basePath ? basePath : "") + "/api/auth/login";
+        const res = await fetch(loginUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -56,7 +58,7 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Gagal login");
-        window.location.href = "/";
+        window.location.href = basePath ? basePath + "/" : "/";
       } catch (err) {
         errBox.textContent = err.message;
         errBox.classList.remove("hidden");

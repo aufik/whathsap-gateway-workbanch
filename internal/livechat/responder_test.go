@@ -187,40 +187,49 @@ func TestCelahBerkasToDocument(t *testing.T) {
 	}
 }
 
-// hookStub verifies the AI hook is used for benar mode only, and that its
+// hookStub verifies the AI hook is invoked for all modes, and that its
 // output goes through sanitizeAIText.
 type hookStub struct {
-	called bool
-	out    string
-	err    error
+	called   bool
+	lastMode CategoryMode
+	lastKind QuestionKind
+	out      string
+	err      error
 }
 
-func (h *hookStub) ComposeAnswer(_ context.Context, _ QuestionKind, _, _ string) (string, error) {
+func (h *hookStub) ComposeAnswer(_ context.Context, mode CategoryMode, kind QuestionKind, _, _ string) (string, error) {
 	h.called = true
+	h.lastMode = mode
+	h.lastKind = kind
 	return h.out, h.err
 }
 
-func TestAIHookBenarOnly(t *testing.T) {
-	sess := baseSession(ModeBenar)
-	h := &hookStub{out: "  Budi\nSantoso  "}
-	res := (&Responder{AI: h}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess})
-	if !h.called || strings.Contains(res.Text, "\n") {
-		t.Fatalf("expected hook to run + sanitize, got text=%q called=%v", res.Text, h.called)
-	}
-
-	// Typo mode must NOT hit the AI hook (determinism for QA).
-	h2 := &hookStub{out: "irrelevant"}
-	sess2 := baseSession(ModeTypo)
-	_ = (&Responder{AI: h2}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess2, Random: seededRand(1)})
-	if h2.called {
-		t.Fatalf("typo mode must not call AI hook")
+func TestAIHookAllModes(t *testing.T) {
+	modes := []CategoryMode{ModeBenar, ModeTypo, ModeNgasal, ModeCelah}
+	for _, m := range modes {
+		sess := baseSession(m)
+		h := &hookStub{out: "  Budi\nSantoso  "}
+		res := (&Responder{AI: h}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess, Random: seededRand(1)})
+		if !h.called {
+			t.Fatalf("expected hook to be called for mode %s", m)
+		}
+		if h.lastMode != m {
+			t.Fatalf("expected lastMode=%s, got %s", m, h.lastMode)
+		}
+		if h.lastKind != KindNama {
+			t.Fatalf("expected lastKind=%s, got %s", KindNama, h.lastKind)
+		}
+		if strings.Contains(res.Text, "\n") {
+			t.Fatalf("expected text to be sanitized without newline, got %q", res.Text)
+		}
 	}
 
 	// Error from hook → fall back to deterministic draft.
-	h3 := &hookStub{err: errors.New("boom")}
-	res3 := (&Responder{AI: h3}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess})
-	if !strings.Contains(res3.Text, sess.NamaPengadu) {
-		t.Fatalf("on AI error should fall back to draft, got %q", res3.Text)
+	sess := baseSession(ModeBenar)
+	hErr := &hookStub{err: errors.New("boom")}
+	resErr := (&Responder{AI: hErr}).ComposeForKind(context.Background(), KindNama, AnswerInput{Session: sess})
+	if !strings.Contains(resErr.Text, sess.NamaPengadu) {
+		t.Fatalf("on AI error should fall back to draft, got %q", resErr.Text)
 	}
 }
 

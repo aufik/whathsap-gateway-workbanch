@@ -111,7 +111,11 @@ func (s *Server) Handler() http.Handler {
 				r.URL.Path == "/livechat.js"
 			if !isPublicAsset {
 				if _, err := s.auth.Manager.SessionFromRequest(r.Context(), r); err != nil {
-					http.Redirect(w, r, "/login.html", http.StatusFound)
+					loginURL := "/login.html"
+					if p := r.Header.Get("X-Forwarded-Prefix"); p != "" {
+						loginURL = strings.TrimRight(p, "/") + "/login.html"
+					}
+					http.Redirect(w, r, loginURL, http.StatusFound)
 					return
 				}
 			}
@@ -192,6 +196,7 @@ func (s *Server) Handler() http.Handler {
 		apiMux.HandleFunc("GET /api/livechat/sessions", s.livechat.handleListSessions)
 		apiMux.HandleFunc("POST /api/livechat/sessions", s.livechat.handleStartSession)
 		apiMux.HandleFunc("GET /api/livechat/sessions/{id}", s.livechat.handleSessionDetail)
+		apiMux.HandleFunc("PATCH /api/livechat/sessions/{id}/keterangan", s.livechat.handleUpdateSessionKeterangan)
 		apiMux.HandleFunc("POST /api/livechat/sessions/{id}/stop", s.livechat.handleStopSession)
 		apiMux.HandleFunc("DELETE /api/livechat/sessions/{id}", s.livechat.handleDeleteSession)
 		apiMux.HandleFunc("GET /api/livechat/assets", s.livechat.handleListAssets)

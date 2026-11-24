@@ -258,7 +258,10 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 		})
 	}
 
-	// 2. Detect done first so we never answer the "selesai" line.
+	// 2. Detect cancellation or done
+	if cancelled, reason := IsCancelled(lastText); cancelled {
+		return true, e.closeWith(StatusFailed, "dibatalkan bot: "+reason, e.ticket)
+	}
 	if done, reason := IsDone(lastText); done {
 		// Ticket can be split across bubbles: try the last bubble first, then
 		// the full excerpt. The persisted header gets it via closeWith argument.
@@ -272,15 +275,17 @@ func (e *Engine) consumeTurn(ctx context.Context, bubbles []CollectedBubble, hum
 		return true, e.closeWith(StatusFinished, reason, e.ticket)
 	}
 
-	// 3. Compose the answer for the latest bubble. If the detector returned an
-	//    unknown/others kind we escalate through the essential fields so the
-	//    bot cannot loop forever on the same question.
+	// 3. Compose the answer for the latest bubble.
 	kind := DetectQuestionKind(lastText)
 	if kind == KindLainnya || kind == KindUnknown {
-		escalated := NextFallback(e.fallbackCount)
-		if escalated != KindLainnya {
-			e.fallbackCount++
-			kind = escalated
+		// Only escalate through fields if AI is not configured.
+		// When AI is present, AI comprehends the bot's question directly.
+		if e.cfg.Responder == nil || e.cfg.Responder.AI == nil {
+			escalated := NextFallback(e.fallbackCount)
+			if escalated != KindLainnya {
+				e.fallbackCount++
+				kind = escalated
+			}
 		}
 	} else {
 		e.fallbackCount = 0

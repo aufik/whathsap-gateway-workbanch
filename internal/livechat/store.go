@@ -112,7 +112,8 @@ const sessionColumns = `
 	nama_pengadu, to_char(tanggal_kejadian,'YYYY-MM-DD'), alamat_kejadian,
 	coalesce(titik_lokasi,''), titik_lokasi_source, asset_ids, max_turns,
 	category_mode, status, coalesce(end_reason,''), coalesce(last_chat_excerpt,''),
-	coalesce(ticket_no,''), total_turns, created_at, started_at, ended_at, rng_seed`
+	coalesce(ticket_no,''), total_turns, created_at, started_at, ended_at, rng_seed,
+	coalesce(keterangan,''), deleted_at`
 
 type scanner interface {
 	Scan(dest ...any) error
@@ -131,6 +132,7 @@ func scanSession(sc scanner) (Session, error) {
 		&s.NamaPengadu, &s.TanggalKejadian, &s.AlamatKejadian, &s.TitikLokasi, &titikSrc,
 		&assets, &s.MaxTurns, &mode, &status, &s.EndReason, &s.LastChatExcerpt,
 		&s.TicketNo, &s.TotalTurns, &s.CreatedAt, &s.StartedAt, &s.EndedAt, &s.RNGSeed,
+		&s.Keterangan, &s.DeletedAt,
 	)
 	if err != nil {
 		return Session{}, err
@@ -156,7 +158,7 @@ func (s *Store) ListSessions(ctx context.Context, userID int64, limit int) ([]Se
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+sessionColumns+`
 		FROM livechat.sessions
-		WHERE user_id = $1
+		WHERE user_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC, id DESC
 		LIMIT $2`, userID, limit)
 	if err != nil {
@@ -191,7 +193,7 @@ func (s *Store) ListSessionsPaged(ctx context.Context, userID int64, filter Sess
 		pageSize = 100
 	}
 
-	where := []string{"user_id = $1"}
+	where := []string{"user_id = $1", "deleted_at IS NULL"}
 	args := []any{userID}
 	paramIdx := 2
 
@@ -283,7 +285,7 @@ func (s *Store) GetSessionDetail(ctx context.Context, userID, sessionID int64) (
 	row := s.db.QueryRowContext(ctx, `
 		SELECT `+sessionColumns+`
 		FROM livechat.sessions
-		WHERE id = $1 AND user_id = $2`, sessionID, userID)
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, sessionID, userID)
 	sess, err := scanSession(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SessionDetail{}, ErrNotFound
@@ -523,10 +525,32 @@ func (s *Store) InsertTurn(ctx context.Context, userID int64, t Turn) (int64, er
 	return id, err
 }
 
-// DeleteSession removes one session (and cascades messages + turns). Scoped by
+// DeleteSession soft-deletes one session by setting deleted_at = now(). Scoped by
 // user_id so the operation is rejected for other tenants.
 func (s *Store) DeleteSession(ctx context.Context, userID, sessionID int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM livechat.sessions WHERE id = $1 AND user_id = $2`, sessionID, userID)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE livechat.sessions
+		SET deleted_at = now()
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, sessionID, userID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateSessionKeterangan updates the remarks/notes for one session.
+func (s *Store) UpdateSessionKeterangan(ctx context.Context, userID, sessionID int64, keterangan string) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE livechat.sessions
+		SET keterangan = $1
+		WHERE id = $2 AND user_id = $3 AND deleted_at IS NULL`, strings.TrimSpace(keterangan), sessionID, userID)
 	if err != nil {
 		return err
 	}
@@ -543,7 +567,7 @@ func (s *Store) DeleteSession(ctx context.Context, userID, sessionID int64) erro
 // SessionExists confirms ownership without loading the full header.
 func (s *Store) ownsSession(ctx context.Context, userID, sessionID int64) bool {
 	var one int
-	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM livechat.sessions WHERE id = $1 AND user_id = $2`, sessionID, userID).Scan(&one)
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM livechat.sessions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`, sessionID, userID).Scan(&one)
 	return err == nil && one == 1
 }
 
@@ -701,7 +725,7 @@ func (s *Store) AssetInUse(ctx context.Context, userID, assetID int64) (bool, er
 	var exists bool
 	err := s.db.QueryRowContext(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM livechat.sessions WHERE user_id = $1 AND $2 = ANY(asset_ids)
+			SELECT 1 FROM livechat.sessions WHERE user_id = $1 AND $2 = ANY(asset_ids) AND deleted_at IS NULL
 		)`, userID, assetID).Scan(&exists)
 	return exists, err
 }

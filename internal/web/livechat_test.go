@@ -217,6 +217,29 @@ func TestLivechatUserIsolation(t *testing.T) {
 	if rec1.Code != http.StatusOK {
 		t.Fatalf("u1 detail => %d, want 200", rec1.Code)
 	}
+
+	// u1 patches keterangan
+	recPatch, _ := doJSON(t, h1, "PATCH", "/api/livechat/sessions/"+itoa(sess.ID)+"/keterangan", map[string]any{"keterangan": "Catatan QC"})
+	if recPatch.Code != http.StatusOK {
+		t.Fatalf("u1 patch keterangan => %d, want 200", recPatch.Code)
+	}
+	// u2 cannot patch u1's keterangan
+	recPatch2, _ := doJSON(t, h2, "PATCH", "/api/livechat/sessions/"+itoa(sess.ID)+"/keterangan", map[string]any{"keterangan": "Unauthorized"})
+	if recPatch2.Code != http.StatusNotFound {
+		t.Fatalf("u2 patch u1 => %d, want 404", recPatch2.Code)
+	}
+
+	// u1 soft-deletes session
+	recDel, _ := doJSON(t, h1, "DELETE", "/api/livechat/sessions/"+itoa(sess.ID), nil)
+	if recDel.Code != http.StatusOK {
+		t.Fatalf("u1 delete => %d, want 200", recDel.Code)
+	}
+	// After soft delete, detail returns 404
+	recAfterDel := httptest.NewRecorder()
+	h1.ServeHTTP(recAfterDel, httptest.NewRequest("GET", "/api/livechat/sessions/"+itoa(sess.ID), nil))
+	if recAfterDel.Code != http.StatusNotFound {
+		t.Fatalf("u1 detail after delete => %d, want 404", recAfterDel.Code)
+	}
 }
 
 func TestLivechatAssetUploadAndPreview(t *testing.T) {

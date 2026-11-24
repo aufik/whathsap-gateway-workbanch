@@ -2,6 +2,7 @@ package livechat
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 )
@@ -11,8 +12,9 @@ import (
 // too long) without pulling the ai package into every test.
 type AIHook interface {
 	// ComposeAnswer asks the LLM to rewrite a target answer into one chat
-	// sentence. Implementations must return ("", nil) when disabled.
-	ComposeAnswer(ctx context.Context, kind QuestionKind, draft, reportText string) (string, error)
+	// sentence according to the session's category mode (benar, typo, ngasal, celah).
+	// Implementations must return ("", nil) when disabled.
+	ComposeAnswer(ctx context.Context, mode CategoryMode, kind QuestionKind, draft, botQuestion string) (string, error)
 }
 
 // AnswerInput is the immutable session data the responder uses. It comes from
@@ -59,16 +61,23 @@ type Responder struct {
 func (r *Responder) ComposeForKind(ctx context.Context, kind QuestionKind, in AnswerInput) AnswerResult {
 	mode := in.Session.CategoryMode
 	base, media, loc, note, usedOutside := r.localDraft(in, kind, mode)
-	if r.AI != nil && media == nil && loc == nil && base != "" && mode == ModeBenar {
-		// Keep AI strictly for the "benar" mode: typo/ngasal/celah must stay
-		// deterministic so the QA signal is reproducible.
+
+	// When AI hook is present and we don't have media/loc, let AI compose the answer
+	// according to the selected mode (benar, typo, ngasal, celah).
+	if r.AI != nil && media == nil && loc == nil {
 		promptContext := in.BotContext
 		if promptContext == "" {
 			promptContext = in.Session.Title
 		}
-		if rewritten, err := r.AI.ComposeAnswer(ctx, kind, base, promptContext); err == nil {
+		factualDraft, _, _, _, _ := r.factualDraft(in, kind)
+		draft := factualDraft
+		if draft == "" {
+			draft = base
+		}
+		if rewritten, err := r.AI.ComposeAnswer(ctx, mode, kind, draft, promptContext); err == nil {
 			if clean := sanitizeAIText(rewritten); clean != "" {
 				base = clean
+				note = joinNote(note, fmt.Sprintf("ai:%s", mode))
 			}
 		}
 	}
@@ -86,14 +95,9 @@ func (r *Responder) ComposeForKind(ctx context.Context, kind QuestionKind, in An
 	}
 }
 
-// localDraft is the deterministic fallback table. Every branch reads from the
-// session's *final* values so typo / ngasal / celah transformations do not
-// change the underlying facts.
-func (r *Responder) localDraft(in AnswerInput, kind QuestionKind, mode CategoryMode) (text string, media *Asset, loc *Location, note string, usedOutside bool) {
+// factualDraft generates the fact-correct draft for this field using phrase variations (Lapis A).
+func (r *Responder) factualDraft(in AnswerInput, kind QuestionKind) (base string, media *Asset, loc *Location, note string, usedOutside bool) {
 	sess := in.Session
-
-	// 1. Build the correct answer for this field using phrase variations (Lapis A).
-	base := ""
 	switch kind {
 	case KindNama:
 		base = pickNama(sess.NamaPengadu, in.IsRepeat, in.Random)
@@ -103,7 +107,7 @@ func (r *Responder) localDraft(in AnswerInput, kind QuestionKind, mode CategoryM
 		base = pickAlamat(sess.AlamatKejadian, in.IsRepeat, in.Random)
 	case KindIsiLaporan:
 		if strings.TrimSpace(sess.ReportText) != "" {
-			base = pickReport(sess.ReportText, in.Random)
+			base = pickReport(sess.ReportText, in.IsRepeat, in.Random)
 		} else {
 			// Opsi A: tester mengosongkan laporan -> respons balik kontekstual pertanyaan bot
 			base = pickDynamicReport(in.BotContext, in.Random)
@@ -112,13 +116,23 @@ func (r *Responder) localDraft(in AnswerInput, kind QuestionKind, mode CategoryM
 		base, loc, note = r.locationAnswer(in)
 	case KindBerkas:
 		base, media, note = r.mediaAnswer(in)
+	case KindBatalKonfirmasi:
+		base = pickBatalTolak(in.Random)
 	case KindKonfirmasi:
 		base = pickKonfirmasi(in.Random)
 	case KindLainnya, KindUnknown:
 		base = pickLainnya(in.Random)
 	}
+	return base, media, loc, note, false
+}
 
-	// 2. Apply mode transformations on top of the fact-correct answer.
+// localDraft is the deterministic fallback table. Every branch reads from the
+// session's *final* values so typo / ngasal / celah transformations do not
+// change the underlying facts.
+func (r *Responder) localDraft(in AnswerInput, kind QuestionKind, mode CategoryMode) (text string, media *Asset, loc *Location, note string, usedOutside bool) {
+	base, media, loc, note, _ := r.factualDraft(in, kind)
+
+	// Apply mode transformations on top of the fact-correct answer.
 	switch mode {
 	case ModeBenar:
 		return base, media, loc, note, false
@@ -261,6 +275,19 @@ func pickKonfirmasi(rng *rand.Rand) string {
 	return opts[rng.Intn(len(opts))]
 }
 
+func pickBatalTolak(rng *rand.Rand) string {
+	opts := []string{
+		"tidak min, jangan dibatalkan, lanjutkan pengaduan saya",
+		"tidak mau batal pak, tolong dilanjutkan ya",
+		"jangan batal pak, tolong diproses laporannya",
+		"tidak batal min, mohon dilanjutkan",
+	}
+	if rng == nil {
+		return opts[0]
+	}
+	return opts[rng.Intn(len(opts))]
+}
+
 func pickNama(name string, isRepeat bool, rng *rand.Rand) string {
 	if isRepeat {
 		return "Nama saya tadi sudah diinfokan ya pak: " + name
@@ -309,7 +336,19 @@ func pickAlamat(alamat string, isRepeat bool, rng *rand.Rand) string {
 	return opts[rng.Intn(len(opts))]
 }
 
-func pickReport(report string, rng *rand.Rand) string {
+func pickReport(report string, isRepeat bool, rng *rand.Rand) string {
+	if isRepeat {
+		opts := []string{
+			"Maksud saya laporannya mengenai " + report + " pak",
+			"Masalah layanan publiknya: " + report + " min",
+			"Laporannya terkait " + report + ", mohon dibantu ya pak",
+			report + " pak, mohon ditindaklanjuti",
+		}
+		if rng == nil {
+			return opts[0]
+		}
+		return opts[rng.Intn(len(opts))]
+	}
 	opts := []string{
 		report,
 		"Begini pak, " + report,
@@ -392,8 +431,9 @@ var ngasalByKind = map[QuestionKind][]string{
 	KindAlamat:      {"deket pasar yang rame itu pak", "tempetnya agak masuk ke dalam"},
 	KindIsiLaporan:  {"ada yang bikin sebel aja pak", "pokoknya kurang enak dilihat"},
 	KindTitikLokasi: {"share lokasi gak bisa pak hehe", "lokasinya ada di hp aja"},
-	KindBerkas:      {"fotonya belum sempat diambil", "nanti aja ya pak"},
-	KindKonfirmasi:  {"terserah pak", "boleh iya boleh enggak"},
+	KindBerkas:          {"fotonya belum sempat diambil", "nanti aja ya pak"},
+	KindBatalKonfirmasi: {"jangan dibatalkan pak, lanjutin aja", "eh jangan batal dong min"},
+	KindKonfirmasi:      {"terserah pak", "boleh iya boleh enggak"},
 	KindLainnya:     {"iya pak", "begitulah pak"},
 }
 

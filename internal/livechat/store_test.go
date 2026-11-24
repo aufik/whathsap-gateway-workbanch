@@ -207,13 +207,31 @@ func TestStoreSessionCRUDAndCascade(t *testing.T) {
 		t.Fatalf("detail should carry messages+turns, got msgs=%d turns=%d", len(detail.Messages), len(detail.Turns))
 	}
 
-	// 7. Delete + cascade
+	// 7. Update keterangan
+	if err := st.UpdateSessionKeterangan(ctx, u1, sess.ID, "Catatan evaluasi QC: respon bot valid"); err != nil {
+		t.Fatalf("update keterangan: %v", err)
+	}
+	detailUpdated, err := st.GetSessionDetail(ctx, u1, sess.ID)
+	if err != nil || detailUpdated.Session.Keterangan != "Catatan evaluasi QC: respon bot valid" {
+		t.Fatalf("expected updated keterangan, got %q (err=%v)", detailUpdated.Session.Keterangan, err)
+	}
+
+	// 8. Soft Delete
 	if err := st.DeleteSession(ctx, u2, sess.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("foreign delete must fail, got %v", err)
 	}
 	if err := st.DeleteSession(ctx, u1, sess.ID); err != nil {
 		t.Fatalf("delete session: %v", err)
 	}
+	// After soft delete, session is hidden from user detail & listing
+	if _, err := st.GetSessionDetail(ctx, u1, sess.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("soft deleted session must return ErrNotFound on detail, got %v", err)
+	}
+	listAfter, err := st.ListSessions(ctx, u1, 10)
+	if err != nil || len(listAfter) != 0 {
+		t.Fatalf("soft deleted session must be omitted from listing, got len=%d", len(listAfter))
+	}
+	// Messages and turns remain preserved in DB for audit
 	var msgCount, turnCount int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM livechat.messages WHERE session_id = $1`, sess.ID).Scan(&msgCount); err != nil {
 		t.Fatalf("count messages: %v", err)
@@ -221,8 +239,8 @@ func TestStoreSessionCRUDAndCascade(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM livechat.turns WHERE session_id = $1`, sess.ID).Scan(&turnCount); err != nil {
 		t.Fatalf("count turns: %v", err)
 	}
-	if msgCount != 0 || turnCount != 0 {
-		t.Fatalf("cascade failed: messages=%d turns=%d remain", msgCount, turnCount)
+	if msgCount == 0 || turnCount == 0 {
+		t.Fatalf("soft delete must preserve messages and turns in DB, got msgs=%d turns=%d", msgCount, turnCount)
 	}
 }
 

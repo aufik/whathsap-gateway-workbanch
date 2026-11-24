@@ -86,9 +86,11 @@ type Session struct {
 	TicketNo        string            `json:"ticketNo"`
 	TotalTurns      int               `json:"totalTurns"`
 	RNGSeed         int64             `json:"rngSeed"`
+	Keterangan      string            `json:"keterangan"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	StartedAt       *time.Time        `json:"startedAt,omitempty"`
 	EndedAt         *time.Time        `json:"endedAt,omitempty"`
+	DeletedAt       *time.Time        `json:"deletedAt,omitempty"`
 }
 
 // Message is one chat bubble (either sent by us or received from the bot).

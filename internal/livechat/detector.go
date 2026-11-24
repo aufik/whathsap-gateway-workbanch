@@ -10,15 +10,16 @@ import (
 type QuestionKind string
 
 const (
-	KindUnknown     QuestionKind = ""
-	KindNama        QuestionKind = "nama"
-	KindIsiLaporan  QuestionKind = "isi_laporan"
-	KindTanggal     QuestionKind = "tanggal"
-	KindAlamat      QuestionKind = "alamat"
-	KindTitikLokasi QuestionKind = "titik_lokasi"
-	KindBerkas      QuestionKind = "berkas"
-	KindKonfirmasi  QuestionKind = "konfirmasi"
-	KindLainnya     QuestionKind = "lainnya"
+	KindUnknown         QuestionKind = ""
+	KindNama            QuestionKind = "nama"
+	KindIsiLaporan      QuestionKind = "isi_laporan"
+	KindTanggal         QuestionKind = "tanggal"
+	KindAlamat          QuestionKind = "alamat"
+	KindTitikLokasi     QuestionKind = "titik_lokasi"
+	KindBerkas          QuestionKind = "berkas"
+	KindBatalKonfirmasi QuestionKind = "batal_konfirmasi"
+	KindKonfirmasi      QuestionKind = "konfirmasi"
+	KindLainnya         QuestionKind = "lainnya"
 )
 
 // kindRules is evaluated top-down; order matters when a bot message contains
@@ -28,6 +29,11 @@ var kindRules = []struct {
 	kind     QuestionKind
 	patterns []string
 }{
+	// Anti-cancellation prompt must win before general confirmation
+	{KindBatalKonfirmasi, []string{
+		"apakah anda ingin membatalkan", "ingin membatalkan", "batalkan pengaduan",
+		"membatalkan pengaduan", "batal pengaduan",
+	}},
 	// Konfirmasi first: the bot's summary confirmation mentions "lampiran",
 	// "alamat", and "tanggal" inside the recap, so it must win over the
 	// per-field matchers when the question is "...ringkasan aduan di atas
@@ -68,6 +74,10 @@ var kindRules = []struct {
 		"dijelaskan lebih dulu kejadian", "kejadian atau masalah",
 		"masalah yang ingin disampaikan", "kejadian yang ingin disampaikan",
 		"jelaskan kejadian", "jelaskan masalah",
+		"masalah layanan publik", "sebutkan secara singkat masalah",
+		"ingin mengadukan tentang apa", "judul laporan", "judul aduan",
+		"ingin anda adukan", "hal yang ingin diadukan", "hal yang ingin dilaporkan",
+		"aduan tentang apa", "tentang apa yang ingin diadukan", "ingin melaporkan apa",
 	}},
 }
 
@@ -139,6 +149,28 @@ func DetectQuestionKind(botText string) QuestionKind {
 	return KindLainnya
 }
 
+var cancelSignals = []string{
+	"pengaduan sudah kami batalkan",
+	"pengaduan telah dibatalkan",
+	"pengaduan dibatalkan",
+	"sudah kami batalkan",
+	"kami batalkan ya",
+}
+
+// IsCancelled reports whether the bot announced that the complaint was cancelled.
+func IsCancelled(botText string) (bool, string) {
+	if strings.TrimSpace(botText) == "" {
+		return false, ""
+	}
+	norm := NormalizeForDetect(botText)
+	for _, sig := range cancelSignals {
+		if strings.Contains(norm, sig) {
+			return true, sig
+		}
+	}
+	return false, ""
+}
+
 // IsDone reports whether the bot announced completion and the human reason
 // that matched, e.g. ("laporan anda telah kami terima", "laporan anda telah kami terima").
 func IsDone(botText string) (bool, string) {
@@ -146,6 +178,11 @@ func IsDone(botText string) (bool, string) {
 		return false, ""
 	}
 	norm := NormalizeForDetect(botText)
+	for _, csig := range cancelSignals {
+		if strings.Contains(norm, csig) {
+			return false, ""
+		}
+	}
 	for _, sig := range doneSignals {
 		if strings.Contains(norm, sig) {
 			return true, sig

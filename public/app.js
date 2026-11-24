@@ -32,6 +32,7 @@ const state = {
 };
 
 const el = (id) => document.getElementById(id);
+const BASE_PATH = window.location.pathname.replace(/\/(?:index\.html)?$/, "").replace(/\/$/, "");
 
 async function api(path, options = {}) {
   const opts = { ...options, headers: { ...(options.headers || {}) } };
@@ -39,7 +40,10 @@ async function api(path, options = {}) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
   }
-  const res = await fetch(path, opts);
+  const fullPath = (BASE_PATH && path.startsWith("/") && !path.startsWith(BASE_PATH + "/"))
+    ? (BASE_PATH + path)
+    : path;
+  const res = await fetch(fullPath, opts);
   const text = await res.text();
   let data = null;
   if (text) {
@@ -236,7 +240,8 @@ function applyFullSnapshot(snap) {
 }
 
 function connectSSE() {
-  const es = new EventSource("/api/events");
+  const sseUrl = (BASE_PATH && !"/api/events".startsWith(BASE_PATH)) ? (BASE_PATH + "/api/events") : "/api/events";
+  const es = new EventSource(sseUrl);
   es.onmessage = (e) => {
     if (!e.data) return;
     try {
@@ -2178,7 +2183,7 @@ async function loadCurrentUser() {
     }
   } catch (err) {
     if (err.message.includes("401")) {
-      window.location.href = "/login.html";
+      window.location.href = BASE_PATH ? BASE_PATH + "/login.html" : "/login.html";
     }
   }
 }
@@ -2211,7 +2216,7 @@ function bindAccountEvents() {
     try {
       await api("/api/auth/logout", { method: "POST" });
     } finally {
-      window.location.href = "/login.html";
+      window.location.href = BASE_PATH ? BASE_PATH + "/login.html" : "/login.html";
     }
   });
 
@@ -2496,7 +2501,8 @@ function setupExportModal() {
 
       closeModal();
       toast("Menyiapkan unduhan Excel sesuai filter...");
-      window.location.href = `/api/excel/download?${params.toString()}`;
+      const dlUrl = (BASE_PATH ? BASE_PATH : "") + `/api/excel/download?${params.toString()}`;
+      window.location.href = dlUrl;
     });
   }
 }
