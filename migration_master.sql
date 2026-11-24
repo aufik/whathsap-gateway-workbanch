@@ -257,4 +257,16 @@ CREATE TABLE IF NOT EXISTS livechat.turns (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_live_turns_session_turn ON livechat.turns (session_id, turn_no);
 
+-- Berikan izin akses penuh ke role webchat_user jika ada di database
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'webchat_user') THEN
+        GRANT USAGE ON SCHEMA public, workbench, livechat TO webchat_user;
+        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public, workbench, livechat TO webchat_user;
+        GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public, workbench, livechat TO webchat_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public, workbench, livechat GRANT ALL ON TABLES TO webchat_user;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public, workbench, livechat GRANT ALL ON SEQUENCES TO webchat_user;
+    END IF;
+END $$;
+
 COMMIT;
