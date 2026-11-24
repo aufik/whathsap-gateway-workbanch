@@ -15,7 +15,7 @@ DECLARE
     v_start_no INT;
 BEGIN
     -- 1. Tentukan target user (prioritaskan superadmin_kamil id 2 pemilik data, fallback user pertama)
-    SELECT id INTO v_target_user_id FROM public.users WHERE username = 'kamil';
+    SELECT id INTO v_target_user_id FROM public.users WHERE username = 'kamil' LIMIT 1;
     IF v_target_user_id IS NULL THEN
         SELECT id INTO v_target_user_id FROM public.users ORDER BY id LIMIT 1;
     END IF;
