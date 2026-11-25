@@ -174,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	apiMux.HandleFunc("DELETE /api/oob/rows/{no}", tenant(s.handleOOBRowDeleteForUser))
 	apiMux.HandleFunc("POST /api/oob/delete-batch", tenant(s.handleOOBDeleteBatchForUser))
 	apiMux.HandleFunc("POST /api/oob/clear-all", tenant(s.handleOOBClearAllForUser))
+	apiMux.HandleFunc("POST /api/oob/reevaluate-all", tenant(s.handleOOBReevaluateAllForUser))
+	apiMux.HandleFunc("POST /api/oob/reevaluate-batch", tenant(s.handleOOBReevaluateBatchForUser))
 
 	apiMux.HandleFunc("POST /api/stress/generate", tenant(s.handleStressGenerateForUser))
 	apiMux.HandleFunc("POST /api/stress/rows", tenant(s.handleStressCreateForUser))
@@ -783,6 +785,110 @@ func (s *Server) handleOOBClearAllForUser(ctx context.Context, userID int64, w h
 	writeJSON(w, http.StatusOK, map[string]any{
 		"rows":    rows,
 		"summary": sum,
+	})
+}
+
+func (s *Server) handleOOBReevaluateAllForUser(ctx context.Context, userID int64, w http.ResponseWriter, r *http.Request) {
+	st := s.tenantStore(ctx, userID)
+	rows, _ := st.OutOfBankSnapshot()
+	settings := s.userSettings(ctx, userID)
+	evalCtx := ai.ContextWithAIEngine(ctx, settings.AIEngine)
+
+	reevaluated := 0
+	cocokCount := 0
+	tidakCount := 0
+
+	for _, row := range rows {
+		if strings.TrimSpace(row.ActualReply) == "" {
+			continue
+		}
+		status, notes := s.aiEngine.EvaluateOutOfBankReply(evalCtx, row, row.ActualReply)
+		_, _, err := st.UpdateOutOfBankRow(row.No, model.OutOfBankPatch{
+			ResultStatus: &status,
+			Notes:        &notes,
+		})
+		if err == nil {
+			reevaluated++
+			if status == "Cocok" {
+				cocokCount++
+			} else if status == "Tidak" {
+				tidakCount++
+			}
+		}
+	}
+
+	updatedRows, sum := st.OutOfBankSnapshot()
+	s.broker.Broadcast(userID, "oob_reloaded", map[string]any{
+		"rows":    updatedRows,
+		"summary": sum,
+	})
+	if s.workbooks != nil {
+		s.workbooks.MarkDirty(userID)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":       reevaluated,
+		"cocok":       cocokCount,
+		"tidak":       tidakCount,
+		"summary":     sum,
+	})
+}
+
+func (s *Server) handleOOBReevaluateBatchForUser(ctx context.Context, userID int64, w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Numbers []int `json:"numbers"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if len(req.Numbers) == 0 {
+		writeErr(w, http.StatusBadRequest, errors.New("daftar nomor baris kosong"))
+		return
+	}
+
+	st := s.tenantStore(ctx, userID)
+	settings := s.userSettings(ctx, userID)
+	evalCtx := ai.ContextWithAIEngine(ctx, settings.AIEngine)
+
+	reevaluated := 0
+	cocokCount := 0
+	tidakCount := 0
+
+	for _, num := range req.Numbers {
+		row, ok := st.GetOutOfBankRow(num)
+		if !ok || strings.TrimSpace(row.ActualReply) == "" {
+			continue
+		}
+		status, notes := s.aiEngine.EvaluateOutOfBankReply(evalCtx, row, row.ActualReply)
+		_, _, err := st.UpdateOutOfBankRow(row.No, model.OutOfBankPatch{
+			ResultStatus: &status,
+			Notes:        &notes,
+		})
+		if err == nil {
+			reevaluated++
+			if status == "Cocok" {
+				cocokCount++
+			} else if status == "Tidak" {
+				tidakCount++
+			}
+		}
+	}
+
+	updatedRows, sum := st.OutOfBankSnapshot()
+	s.broker.Broadcast(userID, "oob_reloaded", map[string]any{
+		"rows":    updatedRows,
+		"summary": sum,
+	})
+	if s.workbooks != nil {
+		s.workbooks.MarkDirty(userID)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":       reevaluated,
+		"cocok":       cocokCount,
+		"tidak":       tidakCount,
+		"summary":     sum,
 	})
 }
 

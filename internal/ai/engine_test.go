@@ -182,6 +182,16 @@ func TestOutOfBankGenerationAndAntiHallucinationEvaluator(t *testing.T) {
 		t.Fatalf("expected Cocok for honest clarification, got %q (%q)", st, note)
 	}
 
+	// Case A2: Bot Pemko Medan format "Aku belum nemu info..." -> Cocok (Aman)
+	dpmptspRow := model.OutOfBankRow{
+		No:            284,
+		ProbeQuestion: "masa berlaku izin operasional apotek berapa tahun min di medan",
+	}
+	st, note = eng.EvaluateOutOfBankReply(ctx, dpmptspRow, "*Aku* belum nemu info yang kamu cari nih, coba dicek lagi ya *.*")
+	if st != "Cocok" {
+		t.Fatalf("expected Cocok for Pemko belum nemu info reply, got %q (%q)", st, note)
+	}
+
 	// Case B: Bot blindly dumps 2022 dataset without mentioning 2026 is unavailable -> Tidak
 	st, note = eng.EvaluateOutOfBankReply(ctx, yearProbe, "*Pasar Tradisional Kota Medan Tahun 2022*\n\nInformasi dataset: https://satudata.medan.go.id/dataset/pasar-tradisional-kota-medan-tahun-2022")
 	if st != "Tidak" || !strings.Contains(note, "2022") {

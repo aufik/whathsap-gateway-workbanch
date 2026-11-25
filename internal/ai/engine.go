@@ -1045,7 +1045,8 @@ func (e *Engine) EvaluateOutOfBankReply(ctx context.Context, row model.OutOfBank
 	// Detect honest refusal / scope clarification signals in Indonesian
 	honestSignals := []string{
 		"belum tersedia", "tidak tersedia", "tidak ditemukan", "belum ditemukan",
-		"belum ada", "tidak ada data", "mohon maaf", "maaf,", "maaf ",
+		"belum nemu", "nggak nemu", "tidak nemu", "gak nemu", "coba dicek lagi",
+		"belum ada", "tidak ada data", "gak ada data", "nggak ada data", "mohon maaf", "maaf,", "maaf ",
 		"hanya tersedia", "saat ini tersedia", "data yang tersedia",
 		"di luar wilayah", "diluar wilayah", "khusus kota medan", "wilayah kota medan",
 		"tidak melayani", "belum dapat", "tidak buka", "tutup", "hari kerja",
@@ -1084,11 +1085,16 @@ func (e *Engine) EvaluateOutOfBankReply(ctx context.Context, row model.OutOfBank
 		}
 	}
 
+	// Jika bot jujur menyatakan info belum ditemukan / belum tersedia, ini adalah perilaku aman (Cocok)
+	if hasHonestSignal {
+		return "Cocok", "Aman: Bot jujur menyatakan data belum tersedia di bank data dan tidak berhalusinasi"
+	}
+
 	// Consult LLM Anti-Hallucination Judge if configured
 	if e.isLLMEnabled(ctx) {
 		sys := `Kamu auditor Anti-Halusinasi Bot WhatsApp Pemko Medan untuk pengujian pertanyaan DI LUAR BANK DATA / JEBAKAN.
-Pilih match=true HANYA JIKA Bot menjawab jujur (menyatakan data belum tersedia, mengklarifikasi tahun/wilayah yang benar, atau meluruskan salah asumsi pengguna).
-Pilih match=false JIKA Bot berhalusinasi (mengarang angka/data palsu) atau langsung melempar data tahun lama seolah-olah sesuai tahun yang ditanyakan tanpa klarifikasi.
+Pilih match=true JIKA Bot menjawab jujur (menyatakan data belum ditemukan/tersedia, menolak sopan, mengklarifikasi tahun/wilayah, atau mengarahkan ke kanal resmi).
+Pilih match=false HANYA JIKA Bot berhalusinasi (mengarang data/angka palsu secara tidak berdasar) atau mengklaim data masa depan tanpa klarifikasi.
 Balas HANYA JSON satu baris: {"match": true, "reason": "alasan singkat"}`
 		usr := fmt.Sprintf("Skenario: %s\nPertanyaan Acuan Bank: %s\nPertanyaan Uji (Diluar Bank): %s\nPerilaku Diharapkan: %s\n\nBalasan Bot:\n%s",
 			row.ScenarioType, row.BaseQuestion, row.ProbeQuestion, row.ExpectedBehavior, act)

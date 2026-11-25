@@ -284,4 +284,57 @@ func TestParseExportFilterWithTime(t *testing.T) {
 	}
 }
 
+func TestOOBReevaluateAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	workExcel := filepath.Join(tmpDir, "test.xlsx")
+	srcRaw, err := os.ReadFile("../../Uji-Bank-Pertanyaan-Programmer-4.xlsx")
+	if err != nil {
+		t.Fatalf("read source excel: %v", err)
+	}
+	if err := os.WriteFile(workExcel, srcRaw, 0644); err != nil {
+		t.Fatalf("write temp: %v", err)
+	}
+
+	cfg, _ := config.Load("")
+	cfg.ExcelFile = workExcel
+	store, err := excel.NewStore(workExcel)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	aiEng := ai.NewEngine(cfg)
+	broker := NewSSEBroker()
+
+	srv := NewServer(cfg, store, aiEng, nil, nil, broker, os.DirFS("../../public"), AuthWiring{})
+
+	// Append an OOB row that was tested with "Aku belum nemu info..." and was marked "Tidak"
+	addedRows, _, _, err := store.AppendOutOfBankRows([]model.OutOfBankRow{
+		{
+			ProbeQuestion: "masa berlaku izin apotek berapa tahun min",
+			ActualReply:   "*Aku* belum nemu info yang kamu cari nih, coba dicek lagi ya *.*",
+			ResultStatus:  "Tidak",
+		},
+	})
+	if err != nil || len(addedRows) == 0 {
+		t.Fatalf("failed to append OOB row: %v", err)
+	}
+	targetNo := addedRows[0].No
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/oob/reevaluate-all", nil)
+	srv.handleOOBReevaluateAllForUser(context.Background(), 1, rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	row, ok := store.GetOutOfBankRow(targetNo)
+	if !ok {
+		t.Fatalf("expected row %d exists", targetNo)
+	}
+	if row.ResultStatus != "Cocok" {
+		t.Fatalf("expected row %d to be reevaluated to Cocok, got %q (notes: %s)", targetNo, row.ResultStatus, row.Notes)
+	}
+}
+
+
 

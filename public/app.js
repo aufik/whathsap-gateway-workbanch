@@ -1612,6 +1612,31 @@ function bindEvents() {
     renderOutOfBankSection();
   });
 
+  el("btnReevaluateSelectedOOB")?.addEventListener("click", async () => {
+    const count = state.oobSelectedSet.size;
+    if (count === 0) return;
+    if (!confirm(`Evaluasi ulang ${count} soal terpilih berdasarkan balasan yang sudah ada?`)) return;
+    const numbers = Array.from(state.oobSelectedSet);
+    toast(`Mengevaluasi ${count} soal terpilih...`);
+    try {
+      const res = await api("/api/oob/reevaluate-batch", { method: "POST", body: { numbers } });
+      toast(`Evaluasi selesai: ${res.total} baris diperbarui (${res.cocok} Cocok, ${res.tidak} Tidak Cocok).`);
+    } catch (err) {
+      toast(`Gagal evaluasi ulang: ${err.message}`, true);
+    }
+  });
+
+  el("btnReevaluateAllOOB")?.addEventListener("click", async () => {
+    if (!confirm("Evaluasi ulang SEMUA balasan bot yang sudah tersimpan pada sheet Uji Diluar Bank?\n\n(Proses ini berjalan di memori/database tanpa mengirim chat apa pun ke WhatsApp)")) return;
+    toast("Menjalankan evaluasi ulang semua balasan...");
+    try {
+      const res = await api("/api/oob/reevaluate-all", { method: "POST" });
+      toast(`Evaluasi selesai: ${res.total} baris diperbarui (${res.cocok} Cocok / Aman, ${res.tidak} Tidak Cocok).`);
+    } catch (err) {
+      toast(`Gagal evaluasi ulang: ${err.message}`, true);
+    }
+  });
+
   el("btnDeleteSelectedOOB").addEventListener("click", async () => {
     const count = state.oobSelectedSet.size;
     if (count === 0) return;
