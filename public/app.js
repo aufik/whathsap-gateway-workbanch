@@ -2483,9 +2483,9 @@ function setupExportModal() {
 
   const dateFrom = el("expDateFrom");
   const dateTo = el("expDateTo");
-  const fmtDate = (d) => {
+  const fmtDateTime = (d, timeStr = "00:00") => {
     const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${timeStr}`;
   };
 
   el("expQuickAll")?.addEventListener("click", () => {
@@ -2493,21 +2493,21 @@ function setupExportModal() {
     if (dateTo) dateTo.value = "";
   });
   el("expQuickToday")?.addEventListener("click", () => {
-    const today = fmtDate(new Date());
-    if (dateFrom) dateFrom.value = today;
-    if (dateTo) dateTo.value = today;
+    const now = new Date();
+    if (dateFrom) dateFrom.value = fmtDateTime(now, "00:00");
+    if (dateTo) dateTo.value = fmtDateTime(now, "23:59");
   });
   el("expQuick7d")?.addEventListener("click", () => {
     const now = new Date();
     const past = new Date(now.getTime() - 7 * 86400000);
-    if (dateFrom) dateFrom.value = fmtDate(past);
-    if (dateTo) dateTo.value = fmtDate(now);
+    if (dateFrom) dateFrom.value = fmtDateTime(past, "00:00");
+    if (dateTo) dateTo.value = fmtDateTime(now, "23:59");
   });
   el("expQuick30d")?.addEventListener("click", () => {
     const now = new Date();
     const past = new Date(now.getTime() - 30 * 86400000);
-    if (dateFrom) dateFrom.value = fmtDate(past);
-    if (dateTo) dateTo.value = fmtDate(now);
+    if (dateFrom) dateFrom.value = fmtDateTime(past, "00:00");
+    if (dateTo) dateTo.value = fmtDateTime(now, "23:59");
   });
 
   if (btnExecute) {

@@ -493,15 +493,11 @@ func (h *livechatHandlers) handleExcelDownload(w http.ResponseWriter, r *http.Re
 		lcFilter.CategoryMode = strings.TrimSpace(q.Get("category"))
 	}
 	lcFilter.Status = strings.TrimSpace(q.Get("status"))
-	if df := strings.TrimSpace(q.Get("date_from")); df != "" {
-		if t, err := time.Parse("2006-01-02", df); err == nil {
-			lcFilter.DateFrom = t
-		}
+	if t, ok := parseFilterDateTime(q.Get("date_from"), q.Get("time_from"), false); ok {
+		lcFilter.DateFrom = t
 	}
-	if dt := strings.TrimSpace(q.Get("date_to")); dt != "" {
-		if t, err := time.Parse("2006-01-02", dt); err == nil {
-			lcFilter.DateTo = t.Add(24*time.Hour - time.Millisecond)
-		}
+	if t, ok := parseFilterDateTime(q.Get("date_to"), q.Get("time_to"), true); ok {
+		lcFilter.DateTo = t
 	}
 
 	data, fileName, err := livechat.GenerateExcel(r.Context(), h.store, userID, lcFilter)

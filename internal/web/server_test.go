@@ -224,3 +224,64 @@ func doReq(url string, body ...string) (*http.Response, error) {
 	return http.DefaultClient.Do(req)
 }
 
+func TestParseFilterDateTime(t *testing.T) {
+	// 1. Date only
+	tFrom, ok := parseFilterDateTime("2026-11-25", "", false)
+	if !ok {
+		t.Fatalf("expected ok for date only")
+	}
+	if tFrom.Year() != 2026 || tFrom.Month() != 11 || tFrom.Day() != 25 || tFrom.Hour() != 0 || tFrom.Minute() != 0 {
+		t.Fatalf("unexpected tFrom: %v", tFrom)
+	}
+
+	tTo, ok := parseFilterDateTime("2026-11-25", "", true)
+	if !ok {
+		t.Fatalf("expected ok for date only isEnd=true")
+	}
+	if tTo.Hour() != 23 || tTo.Minute() != 59 || tTo.Second() != 59 {
+		t.Fatalf("unexpected tTo: %v", tTo)
+	}
+
+	// 2. Separate date and time
+	tFromTime, ok := parseFilterDateTime("2026-11-25", "08:30", false)
+	if !ok {
+		t.Fatalf("expected ok for separate date and time")
+	}
+	if tFromTime.Hour() != 8 || tFromTime.Minute() != 30 || tFromTime.Second() != 0 {
+		t.Fatalf("unexpected tFromTime: %v", tFromTime)
+	}
+
+	tToTime, ok := parseFilterDateTime("2026-11-25", "17:45", true)
+	if !ok {
+		t.Fatalf("expected ok for separate date and time isEnd=true")
+	}
+	if tToTime.Hour() != 17 || tToTime.Minute() != 45 || tToTime.Second() != 59 {
+		t.Fatalf("unexpected tToTime: %v", tToTime)
+	}
+
+	// 3. Combined datetime string
+	tCombined, ok := parseFilterDateTime("2026-11-25 14:15:30", "", false)
+	if !ok {
+		t.Fatalf("expected ok for combined datetime")
+	}
+	if tCombined.Hour() != 14 || tCombined.Minute() != 15 || tCombined.Second() != 30 {
+		t.Fatalf("unexpected tCombined: %v", tCombined)
+	}
+}
+
+func TestParseExportFilterWithTime(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/excel/download?date_from=2026-11-20&time_from=09:15&date_to=2026-11-25&time_to=18:30&sheets=bank,summary", nil)
+	filter := parseExportFilter(req)
+
+	if !filter.IncludesSheet("bank") || !filter.IncludesSheet("summary") {
+		t.Fatalf("expected sheets bank & summary included")
+	}
+	if filter.DateFrom.Hour() != 9 || filter.DateFrom.Minute() != 15 {
+		t.Fatalf("expected DateFrom 09:15, got %v", filter.DateFrom)
+	}
+	if filter.DateTo.Hour() != 18 || filter.DateTo.Minute() != 30 || filter.DateTo.Second() != 59 {
+		t.Fatalf("expected DateTo 18:30:59, got %v", filter.DateTo)
+	}
+}
+
+

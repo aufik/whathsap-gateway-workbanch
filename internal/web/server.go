@@ -1034,6 +1034,46 @@ func (s *Server) handleReloadEnvForUser(ctx context.Context, userID int64, w htt
 		"settings": settings,
 	})
 }
+// parseFilterDateTime mem-parse string tanggal dan waktu dari parameter query
+// dengan dukungan berbagai format (tanggal saja, tanggal+waktu, ISO/RFC3339).
+// Jika isEnd bernilai true dan waktu tidak dispesifikasikan (atau hanya jam:menit),
+// batas akhir otomatis digeser ke akhir detik dari menit/hari bersangkutan.
+func parseFilterDateTime(dateStr, timeStr string, isEnd bool) (time.Time, bool) {
+	raw := strings.TrimSpace(dateStr)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	tStr := strings.TrimSpace(timeStr)
+	if !strings.ContainsAny(raw, " T") && tStr != "" {
+		raw = raw + " " + tStr
+	}
+
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04",
+		time.RFC3339,
+		"2006-01-02",
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.ParseInLocation(layout, raw, time.Local); err == nil {
+			if layout == "2006-01-02" {
+				if isEnd {
+					t = t.Add(24*time.Hour - time.Millisecond)
+				}
+			} else if layout == "2006-01-02 15:04" || layout == "2006-01-02T15:04" {
+				if isEnd {
+					t = t.Add(59*time.Second + 999*time.Millisecond)
+				}
+			}
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
 func parseExportFilter(r *http.Request) workbench.ExportFilter {
 	q := r.URL.Query()
 	var filter workbench.ExportFilter
@@ -1050,15 +1090,11 @@ func parseExportFilter(r *http.Request) workbench.ExportFilter {
 		filter.Category = strings.TrimSpace(q.Get("mode"))
 	}
 	filter.ResultStatus = strings.TrimSpace(q.Get("status"))
-	if df := strings.TrimSpace(q.Get("date_from")); df != "" {
-		if t, err := time.Parse("2006-01-02", df); err == nil {
-			filter.DateFrom = t
-		}
+	if t, ok := parseFilterDateTime(q.Get("date_from"), q.Get("time_from"), false); ok {
+		filter.DateFrom = t
 	}
-	if dt := strings.TrimSpace(q.Get("date_to")); dt != "" {
-		if t, err := time.Parse("2006-01-02", dt); err == nil {
-			filter.DateTo = t.Add(24*time.Hour - time.Millisecond)
-		}
+	if t, ok := parseFilterDateTime(q.Get("date_to"), q.Get("time_to"), true); ok {
+		filter.DateTo = t
 	}
 	return filter
 }
